@@ -1,0 +1,170 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizeWebsiteUrl, slugifyName, SUBMISSION_LIMITS, type SubmissionErrors } from "@/lib/submissions/validation";
+import type { ListingStatus } from "@/types/database";
+
+export type SubmissionValues = {
+  name: string;
+  url: string;
+  categoryMode: "existing" | "request";
+  categoryId: string;
+  requestedCategory: string;
+  requestedCategoryDescription: string;
+  description: string;
+};
+
+export type SubmissionActionState = {
+  errors: SubmissionErrors;
+  values?: SubmissionValues;
+};
+
+export const initialSubmissionState: SubmissionActionState = { errors: {} };
+
+function field(formData: FormData, name: string) {
+  return String(formData.get(name) ?? "").trim();
+}
+
+function readValues(formData: FormData): SubmissionValues {
+  return {
+    name: field(formData, "name"),
+    url: field(formData, "url"),
+    categoryMode: field(formData, "categoryMode") === "request" ? "request" : "existing",
+    categoryId: field(formData, "categoryId"),
+    requestedCategory: field(formData, "requestedCategory"),
+    requestedCategoryDescription: field(formData, "requestedCategoryDescription"),
+    description: field(formData, "description"),
+  };
+}
+
+function validate(values: SubmissionValues) {
+  const errors: SubmissionErrors = {};
+  if (values.name.length < SUBMISSION_LIMITS.nameMin || values.name.length > SUBMISSION_LIMITS.nameMax) {
+    errors.name = `Use between ${SUBMISSION_LIMITS.nameMin} and ${SUBMISSION_LIMITS.nameMax} characters.`;
+  }
+  const normalizedUrl = normalizeWebsiteUrl(values.url);
+  if ("error" in normalizedUrl) errors.url = normalizedUrl.error;
+  if (values.description.length < SUBMISSION_LIMITS.descriptionMin || values.description.length > SUBMISSION_LIMITS.descriptionMax) {
+    errors.description = `Use between ${SUBMISSION_LIMITS.descriptionMin} and ${SUBMISSION_LIMITS.descriptionMax} characters.`;
+  }
+  if (values.categoryMode === "existing" && !values.categoryId) errors.category = "Choose the closest existing category.";
+  if (values.categoryMode === "request" && (values.requestedCategory.length < SUBMISSION_LIMITS.requestedCategoryMin || values.requestedCategory.length > SUBMISSION_LIMITS.requestedCategoryMax)) {
+    errors.requestedCategory = `Use between ${SUBMISSION_LIMITS.requestedCategoryMin} and ${SUBMISSION_LIMITS.requestedCategoryMax} characters.`;
+  }
+  if (values.requestedCategoryDescription.length > 800) errors.requestedCategory = "Keep the category explanation to 800 characters or fewer.";
+  return { errors, normalizedUrl };
+}
+
+export async function saveSubmissionAction(_state: SubmissionActionState, formData: FormData): Promise<SubmissionActionState> {
+  const values = readValues(formData);
+  const { errors, normalizedUrl } = validate(values);
+  if (Object.keys(errors).length || "error" in normalizedUrl) return { errors, values };
+
+  const supabase = await getSupabaseServerClient();
+  if (!supabase) return { errors: { form: "Website submissions are not configured for this deployment." }, values };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect(`/login?next=${encodeURIComponent(field(formData, "listingId") ? `/submit/${field(formData, "listingId")}` : "/submit")}`);
+
+  const listingId = field(formData, "listingId") || null;
+  let existing: { id: string; status: ListingStatus; owner_id: string | null } | null = null;
+  if (listingId) {
+    const result = await supabase.from("website_listings").select("id,status,owner_id").eq("id", listingId).maybeSingle();
+    if (result.error || !result.data || result.data.owner_id !== user.id) {
+      return { errors: { form: "We could not find an editable submission for this account." }, values };
+    }
+    existing = result.data;
+    if (!["draft", "rejected", "approved"].includes(existing.status)) {
+      return { errors: { form: "This submission is already under review and cannot be edited." }, values };
+    }
+  }
+
+  const duplicateResult = await supabase.rpc("has_likely_duplicate_domain", {
+    candidate_domain: normalizedUrl.domain,
+    excluded_listing_id: existing?.id ?? null,
+  });
+  if (duplicateResult.error) return { errors: { form: "We could not check this domain for duplicates. Please try again." }, values };
+  if (duplicateResult.data) {
+    return { errors: { url: "This domain, or a closely related subdomain, already has a submission. Contact us if you manage the existing listing." }, values };
+  }
+
+  let categoryId: string | null = null;
+  let categoryRequestId: string | null = null;
+  if (values.categoryMode === "existing") {
+    const categoryResult = await supabase.from("categories").select("id").eq("id", values.categoryId).eq("is_active", true).maybeSingle();
+    if (categoryResult.error || !categoryResult.data) return { errors: { category: "That category is no longer available. Choose another." }, values };
+    categoryId = categoryResult.data.id;
+  } else {
+    const requestResult = await supabase.from("category_requests").insert({
+      requested_name: values.requestedCategory,
+      requested_description: values.requestedCategoryDescription || null,
+      requested_by: user.id,
+    }).select("id").single();
+    if (requestResult.error) return { errors: { requestedCategory: "We could not save this category request. Please try again." }, values };
+    categoryRequestId = requestResult.data.id;
+  }
+
+  if (existing?.status === "approved") {
+    const revisionResult = await supabase.from("listing_revisions").insert({
+      listing_id: existing.id,
+      owner_id: user.id,
+      category_id: categoryId,
+      category_request_id: categoryRequestId,
+      name: values.name,
+      url: normalizedUrl.url,
+      normalized_domain: normalizedUrl.domain,
+      short_description: values.description,
+    }).select("id").single();
+    if (revisionResult.error) {
+      const message = revisionResult.error.code === "23505"
+        ? "A revision for this listing is already waiting for review."
+        : "We could not submit this revision. Please try again.";
+      return { errors: { form: message }, values };
+    }
+    revalidatePath("/account");
+    redirect(`/submit/confirmation?id=${revisionResult.data.id}&kind=revision`);
+  }
+
+  const intent = field(formData, "intent") === "submit" ? "submit" : "draft";
+  const nextStatus: ListingStatus = intent === "submit" ? "pending_review" : "draft";
+
+  if (existing) {
+    const updateResult = await supabase.from("website_listings").update({
+      category_id: categoryId,
+      category_request_id: categoryRequestId,
+      name: values.name,
+      slug: `${slugifyName(values.name)}-${existing.id.slice(0, 8)}`,
+      url: normalizedUrl.url,
+      normalized_domain: normalizedUrl.domain,
+      short_description: values.description,
+      status: nextStatus,
+    }).eq("id", existing.id);
+    if (updateResult.error) return { errors: { form: "We could not update this submission. Please try again." }, values };
+    revalidatePath("/account");
+    redirect(`/submit/confirmation?id=${existing.id}&kind=${intent}`);
+  }
+
+  const newId = crypto.randomUUID();
+  const insertResult = await supabase.from("website_listings").insert({
+    id: newId,
+    owner_id: user.id,
+    category_id: categoryId,
+    category_request_id: categoryRequestId,
+    name: values.name,
+    slug: `${slugifyName(values.name)}-${newId.slice(0, 8)}`,
+    url: normalizedUrl.url,
+    normalized_domain: normalizedUrl.domain,
+    short_description: values.description,
+    status: nextStatus,
+  });
+  if (insertResult.error) {
+    const message = insertResult.error.code === "23505"
+      ? "This domain or listing name is already in the directory."
+      : "We could not save this submission. Please try again.";
+    return { errors: { form: message }, values };
+  }
+
+  revalidatePath("/account");
+  redirect(`/submit/confirmation?id=${newId}&kind=${intent}`);
+}
