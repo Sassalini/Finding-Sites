@@ -18,16 +18,17 @@ function SubmissionButtons({ isRevision }: { isRevision: boolean }) {
   return (
     <div className="form-actions">
       <button className="button button-secondary" name="intent" value="draft" disabled={pending}>{pending && intent === "draft" ? "Saving…" : "Save draft"}</button>
-      <button className="button button-accent" name="intent" value="submit" disabled={pending}>{pending && intent === "submit" ? "Submitting…" : "Submit for review"}</button>
+      <button className="button button-accent" name="intent" value="submit" disabled={pending}>{pending && intent === "submit" ? "Preparing summary…" : "Review submission"}</button>
     </div>
   );
 }
 
 const emptyValues: SubmissionValues = {
-  name: "", url: "", categoryMode: "existing", categoryId: "", requestedCategory: "", requestedCategoryDescription: "", description: "",
+  name: "", url: "", categoryMode: "existing", categoryId: "", requestedCategory: "", requestedCategoryDescription: "", description: "", fullDescription: "", contactEmail: "", ownershipConfirmed: false, termsAccepted: false,
 };
 
-export function SubmissionForm({ categories, initialValues = emptyValues, listingId, isRevision = false }: { categories: SubmissionCategory[]; initialValues?: SubmissionValues; listingId?: string; isRevision?: boolean }) {
+export function SubmissionForm({ categories, initialValues, defaultEmail = "", listingId, isRevision = false }: { categories: SubmissionCategory[]; initialValues?: SubmissionValues; defaultEmail?: string; listingId?: string; isRevision?: boolean }) {
+  initialValues ??= { ...emptyValues, contactEmail: defaultEmail };
   const [state, formAction] = useActionState(saveSubmissionAction, initialSubmissionState);
   const values = state.values ?? initialValues;
   const [categoryMode, setCategoryMode] = useState<"existing" | "request">(values.categoryMode);
@@ -35,12 +36,29 @@ export function SubmissionForm({ categories, initialValues = emptyValues, listin
 
   return (
     <form action={formAction} className="submission-form" noValidate>
+      <label className="honeypot-field" aria-hidden="true">Company<input name="company" tabIndex={-1} autoComplete="off" /></label>
       {listingId && <input type="hidden" name="listingId" value={listingId} />}
       {state.errors.form && <p className="form-alert form-alert-error" role="alert">{state.errors.form}</p>}
       <div className="form-field">
         <label htmlFor="website-name">Website name</label>
         <input id="website-name" name="name" defaultValue={values.name} minLength={SUBMISSION_LIMITS.nameMin} maxLength={SUBMISSION_LIMITS.nameMax} aria-invalid={Boolean(state.errors.name)} required />
         <small>Use the name visitors will recognise.</small><FieldError message={state.errors.name} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="full-description">Longer description <span>(optional)</span></label>
+        <textarea id="full-description" name="fullDescription" defaultValue={values.fullDescription} maxLength={SUBMISSION_LIMITS.fullDescriptionMax} rows={8} aria-invalid={Boolean(state.errors.fullDescription)} />
+        <small>Add useful context for the directory team. This is not published automatically.</small><FieldError message={state.errors.fullDescription} />
+      </div>
+      <div className="form-field">
+        <label htmlFor="contact-email">Contact email</label>
+        <input id="contact-email" name="contactEmail" type="email" autoComplete="email" defaultValue={values.contactEmail} maxLength={320} aria-invalid={Boolean(state.errors.contactEmail)} required />
+        <small>Used only for administrative communication about this listing.</small><FieldError message={state.errors.contactEmail} />
+      </div>
+      <div className="consent-fields">
+        <label><input type="checkbox" name="ownershipConfirmed" defaultChecked={values.ownershipConfirmed} /> I own this website or am authorised to list it.</label>
+        <FieldError message={state.errors.ownership} />
+        <label><input type="checkbox" name="termsAccepted" defaultChecked={values.termsAccepted} /> I agree to the <a href="/terms" target="_blank">Terms</a> and <a href="/community-guidelines" target="_blank">Community Guidelines</a>.</label>
+        <FieldError message={state.errors.terms} />
       </div>
       <div className="form-field">
         <label htmlFor="website-url">Website URL</label>
@@ -74,7 +92,7 @@ export function SubmissionForm({ categories, initialValues = emptyValues, listin
         <textarea id="short-description" name="description" defaultValue={values.description} minLength={SUBMISSION_LIMITS.descriptionMin} maxLength={SUBMISSION_LIMITS.descriptionMax} rows={5} onChange={(event) => setDescriptionLength(event.currentTarget.value.length)} aria-invalid={Boolean(state.errors.description)} required />
         <small>Explain what the site offers in one or two plain-language sentences.</small><FieldError message={state.errors.description} />
       </div>
-      <div className="submission-note"><strong>Human review</strong><p>Submitting does not approve, verify, or feature a listing. The directory team reviews every submission.</p></div>
+      <div className="submission-note"><strong>What happens next</strong><p>You will review this summary before any payment. Once your account has an active subscription, the listing joins the human review queue.</p></div>
       <SubmissionButtons isRevision={isRevision} />
     </form>
   );

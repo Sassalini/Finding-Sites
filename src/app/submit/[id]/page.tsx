@@ -15,11 +15,11 @@ export default async function EditSubmissionPage({ params }: { params: Promise<{
   if (!user) redirect(`/login?next=/submit/${id}`);
 
   const [{ data: listing }, { data: categories }] = await Promise.all([
-    supabase.from("website_listings").select("id,owner_id,name,url,category_id,category_request_id,short_description,status").eq("id", id).maybeSingle(),
+    supabase.from("website_listings").select("id,owner_id,name,url,category_id,category_request_id,short_description,full_description,contact_email,ownership_confirmed,terms_accepted,status").eq("id", id).maybeSingle(),
     supabase.from("categories").select("id,name").eq("is_active", true).order("sort_order").order("name"),
   ]);
   if (!listing || listing.owner_id !== user.id) notFound();
-  if (!["draft", "rejected", "approved"].includes(listing.status)) redirect("/account");
+  if (!["draft", "pending_review", "changes_requested", "approved"].includes(listing.status)) redirect("/account");
 
   const [{ data: categoryRequest }, { data: pendingRevision }] = await Promise.all([
     listing.category_request_id
@@ -46,6 +46,10 @@ export default async function EditSubmissionPage({ params }: { params: Promise<{
     requestedCategory: categoryRequest?.requested_name ?? "",
     requestedCategoryDescription: categoryRequest?.requested_description ?? "",
     description: listing.short_description,
+    fullDescription: listing.full_description ?? "",
+    contactEmail: listing.contact_email ?? user.email ?? "",
+    ownershipConfirmed: listing.ownership_confirmed,
+    termsAccepted: listing.terms_accepted,
   };
   const isRevision = listing.status === "approved";
 

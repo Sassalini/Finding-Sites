@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { loginAction, signUpAction, type AuthActionState } from "@/app/login/actions";
+import Link from "next/link";
 
 const initialState: AuthActionState = {};
 
@@ -9,8 +10,8 @@ function SubmitButton({ children }: { children: string }) {
   return <button type="submit" className="button button-accent">{children}</button>;
 }
 
-export function AuthForms({ next, initialError }: { next: string; initialError?: string }) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+export function AuthForms({ next, initialError, initialMode = "login" }: { next: string; initialError?: string; initialMode?: "login" | "signup" }) {
+  const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [loginState, loginFormAction, loginPending] = useActionState(loginAction, initialError ? { error: initialError } : initialState);
   const [signUpState, signUpFormAction, signUpPending] = useActionState(signUpAction, initialState);
   const state = mode === "login" ? loginState : signUpState;
@@ -23,6 +24,7 @@ export function AuthForms({ next, initialError }: { next: string; initialError?:
       </div>
       <form action={mode === "login" ? loginFormAction : signUpFormAction} className="stack-form">
         <input type="hidden" name="next" value={next} />
+        <label className="honeypot-field" aria-hidden="true">Website<input name="website" tabIndex={-1} autoComplete="off" /></label>
         {mode === "signup" && (
           <label>Display name<input name="displayName" autoComplete="name" maxLength={80} required /></label>
         )}
@@ -31,6 +33,7 @@ export function AuthForms({ next, initialError }: { next: string; initialError?:
         {state.error && <p className="form-alert form-alert-error" role="alert">{state.error}</p>}
         {state.message && <p className="form-alert form-alert-success" role="status">{state.message}</p>}
         <SubmitButton>{mode === "login" ? (loginPending ? "Logging in…" : "Log in") : (signUpPending ? "Creating account…" : "Create account")}</SubmitButton>
+        {mode === "login" && <Link className="auth-help-link" href="/forgot-password">Forgot your password?</Link>}
       </form>
     </div>
   );

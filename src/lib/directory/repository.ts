@@ -1,4 +1,5 @@
 import { developmentListings } from "@/data/listings";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { DirectoryFilters, DirectoryListing, DirectoryResult } from "@/types/directory";
 
 export interface DirectoryRepository {
@@ -6,7 +7,7 @@ export interface DirectoryRepository {
 }
 
 function dateValue(value: string) {
-  return new Date(`${value}T00:00:00Z`).getTime();
+  return new Date(value.length === 10 ? `${value}T00:00:00Z` : value).getTime();
 }
 
 function stableScore(value: string) {
@@ -32,9 +33,9 @@ function sortListings(listings: DirectoryListing[], sort: DirectoryFilters["sort
   });
 }
 
-async function searchDevelopmentListings(filters: DirectoryFilters): Promise<DirectoryResult> {
+function buildDirectoryResult(source: DirectoryListing[], filters: DirectoryFilters): DirectoryResult {
   const query = filters.query.trim().toLocaleLowerCase("en-GB");
-  const filtered = developmentListings.filter((listing) => {
+  const filtered = source.filter((listing) => {
     const matchesCategory = !filters.categorySlug || listing.categorySlug === filters.categorySlug;
     const haystack = `${listing.name} ${listing.normalizedDomain} ${listing.shortDescription}`.toLocaleLowerCase("en-GB");
     return matchesCategory && (!query || haystack.includes(query));
@@ -63,12 +64,51 @@ async function searchDevelopmentListings(filters: DirectoryFilters): Promise<Dir
   };
 }
 
+async function searchDevelopmentListings(filters: DirectoryFilters): Promise<DirectoryResult> {
+  return buildDirectoryResult(developmentListings, filters);
+}
+
+async function searchPublishedListings(filters: DirectoryFilters): Promise<DirectoryResult | null> {
+  const supabase = await getSupabaseServerClient();
+  if (!supabase) return null;
+
+  const [{ data: listings, error: listingsError }, { data: categories, error: categoriesError }] = await Promise.all([
+    supabase.from("website_listings").select("id,category_id,name,slug,url,normalized_domain,short_description,is_verified,is_featured,published_at,updated_at").eq("status", "approved"),
+    supabase.from("categories").select("id,name,slug").eq("is_active", true),
+  ]);
+  if (listingsError || categoriesError) return null;
+
+  const categoriesById = new Map((categories ?? []).map((category) => [category.id, category]));
+  const published: DirectoryListing[] = (listings ?? []).flatMap((listing) => {
+    const category = listing.category_id ? categoriesById.get(listing.category_id) : null;
+    if (!category || !listing.published_at) return [];
+    return [{
+      id: listing.id,
+      name: listing.name,
+      slug: listing.slug,
+      url: listing.url,
+      normalizedDomain: listing.normalized_domain,
+      shortDescription: listing.short_description,
+      categorySlug: category.slug,
+      categoryName: category.name,
+      isVerified: listing.is_verified,
+      isFeatured: listing.is_featured,
+      publishedAt: listing.published_at,
+      updatedAt: listing.updated_at,
+      outboundClicks: 0,
+      trendingScore: 0,
+    }];
+  });
+
+  return buildDirectoryResult(published, filters);
+}
+
 export const developmentDirectoryRepository: DirectoryRepository = {
   search: searchDevelopmentListings,
 };
 
-// One boundary keeps the UI independent from the current data source. Replace
-// this selection with a Supabase repository once project credentials exist.
+// Use approved Supabase records in configured environments and retain the
+// fixture as a local interface-development fallback.
 export function getDirectoryResult(filters: DirectoryFilters) {
-  return developmentDirectoryRepository.search(filters);
+  return searchPublishedListings(filters).then((result) => result ?? developmentDirectoryRepository.search(filters));
 }

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getListingEntitlement } from "@/lib/billing/subscription";
 import { normalizeWebsiteUrl, slugifyName, SUBMISSION_LIMITS, type SubmissionErrors } from "@/lib/submissions/validation";
 import type { ListingStatus } from "@/types/database";
 
@@ -14,6 +15,10 @@ export type SubmissionValues = {
   requestedCategory: string;
   requestedCategoryDescription: string;
   description: string;
+  fullDescription: string;
+  contactEmail: string;
+  ownershipConfirmed: boolean;
+  termsAccepted: boolean;
 };
 
 export type SubmissionActionState = {
@@ -36,6 +41,10 @@ function readValues(formData: FormData): SubmissionValues {
     requestedCategory: field(formData, "requestedCategory"),
     requestedCategoryDescription: field(formData, "requestedCategoryDescription"),
     description: field(formData, "description"),
+    fullDescription: field(formData, "fullDescription"),
+    contactEmail: field(formData, "contactEmail"),
+    ownershipConfirmed: formData.get("ownershipConfirmed") === "on",
+    termsAccepted: formData.get("termsAccepted") === "on",
   };
 }
 
@@ -49,6 +58,10 @@ function validate(values: SubmissionValues) {
   if (values.description.length < SUBMISSION_LIMITS.descriptionMin || values.description.length > SUBMISSION_LIMITS.descriptionMax) {
     errors.description = `Use between ${SUBMISSION_LIMITS.descriptionMin} and ${SUBMISSION_LIMITS.descriptionMax} characters.`;
   }
+  if (values.fullDescription.length > SUBMISSION_LIMITS.fullDescriptionMax) errors.fullDescription = `Keep the longer description to ${SUBMISSION_LIMITS.fullDescriptionMax} characters or fewer.`;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.contactEmail) || values.contactEmail.length > 320) errors.contactEmail = "Enter a valid contact email address.";
+  if (!values.ownershipConfirmed) errors.ownership = "Confirm that you own or are authorised to list this website.";
+  if (!values.termsAccepted) errors.terms = "Agree to the Terms and Community Guidelines before continuing.";
   if (values.categoryMode === "existing" && !values.categoryId) errors.category = "Choose the closest existing category.";
   if (values.categoryMode === "request" && (values.requestedCategory.length < SUBMISSION_LIMITS.requestedCategoryMin || values.requestedCategory.length > SUBMISSION_LIMITS.requestedCategoryMax)) {
     errors.requestedCategory = `Use between ${SUBMISSION_LIMITS.requestedCategoryMin} and ${SUBMISSION_LIMITS.requestedCategoryMax} characters.`;
@@ -58,6 +71,7 @@ function validate(values: SubmissionValues) {
 }
 
 export async function saveSubmissionAction(_state: SubmissionActionState, formData: FormData): Promise<SubmissionActionState> {
+  if (field(formData, "company")) return { errors: { form: "We could not save this submission." } };
   const values = readValues(formData);
   const { errors, normalizedUrl } = validate(values);
   if (Object.keys(errors).length || "error" in normalizedUrl) return { errors, values };
@@ -75,9 +89,12 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
       return { errors: { form: "We could not find an editable submission for this account." }, values };
     }
     existing = result.data;
-    if (!["draft", "rejected", "approved"].includes(existing.status)) {
-      return { errors: { form: "This submission is already under review and cannot be edited." }, values };
+    if (!["draft", "pending_review", "changes_requested", "approved"].includes(existing.status)) {
+      return { errors: { form: "This listing is not currently editable." }, values };
     }
+  } else {
+    const entitlement = await getListingEntitlement(supabase, user.id);
+    if (!entitlement.canCreateListing) return { errors: { form: "Your plan includes up to two listings. Delete an existing listing before adding another." }, values };
   }
 
   const duplicateResult = await supabase.rpc("has_likely_duplicate_domain", {
@@ -115,6 +132,8 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
       url: normalizedUrl.url,
       normalized_domain: normalizedUrl.domain,
       short_description: values.description,
+      full_description: values.fullDescription || null,
+      contact_email: values.contactEmail,
     }).select("id").single();
     if (revisionResult.error) {
       const message = revisionResult.error.code === "23505"
@@ -127,7 +146,9 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
   }
 
   const intent = field(formData, "intent") === "submit" ? "submit" : "draft";
-  const nextStatus: ListingStatus = intent === "submit" ? "pending_review" : "draft";
+  // A listing remains a draft until the owner confirms its summary. The next
+  // step either finds an active subscription or sends the owner to Checkout.
+  const nextStatus: ListingStatus = "draft";
 
   if (existing) {
     const updateResult = await supabase.from("website_listings").update({
@@ -138,11 +159,15 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
       url: normalizedUrl.url,
       normalized_domain: normalizedUrl.domain,
       short_description: values.description,
+      full_description: values.fullDescription || null,
+      contact_email: values.contactEmail,
+      ownership_confirmed: values.ownershipConfirmed,
+      terms_accepted: values.termsAccepted,
       status: nextStatus,
     }).eq("id", existing.id);
     if (updateResult.error) return { errors: { form: "We could not update this submission. Please try again." }, values };
     revalidatePath("/account");
-    redirect(`/submit/confirmation?id=${existing.id}&kind=${intent}`);
+    redirect(intent === "submit" ? `/submit/review/${existing.id}` : `/submit/confirmation?id=${existing.id}&kind=draft`);
   }
 
   const newId = crypto.randomUUID();
@@ -156,15 +181,21 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
     url: normalizedUrl.url,
     normalized_domain: normalizedUrl.domain,
     short_description: values.description,
+    full_description: values.fullDescription || null,
+    contact_email: values.contactEmail,
+    ownership_confirmed: values.ownershipConfirmed,
+    terms_accepted: values.termsAccepted,
     status: nextStatus,
   });
   if (insertResult.error) {
-    const message = insertResult.error.code === "23505"
-      ? "This domain or listing name is already in the directory."
-      : "We could not save this submission. Please try again.";
+    const message = insertResult.error.message.includes("LISTING_LIMIT_REACHED")
+      ? "Your plan includes up to two listings. Delete an existing listing before adding another."
+      : insertResult.error.code === "23505"
+        ? "This domain or listing name is already in the directory."
+        : "We could not save this submission. Please try again.";
     return { errors: { form: message }, values };
   }
 
   revalidatePath("/account");
-  redirect(`/submit/confirmation?id=${newId}&kind=${intent}`);
+  redirect(intent === "submit" ? `/submit/review/${newId}` : `/submit/confirmation?id=${newId}&kind=draft`);
 }
