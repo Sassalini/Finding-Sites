@@ -9,16 +9,12 @@ type CategoryPageProps = { params: Promise<{ slug: string }>; searchParams: Prom
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
   const category = getCategory(slug);
-  if (!category) return { title: "Category not found" };
+  if (!category) notFound();
   return {
     title: category.name,
     description: `${category.description} Browse approved listings in Finding Sites.`,
     alternates: { canonical: `/category/${category.slug}` },
   };
-}
-
-export function generateStaticParams() {
-  return [];
 }
 
 export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
