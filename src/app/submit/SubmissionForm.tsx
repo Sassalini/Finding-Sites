@@ -2,10 +2,11 @@
 
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { initialSubmissionState, saveSubmissionAction, type SubmissionValues } from "@/app/submit/actions";
+import { saveSubmissionAction, type SubmissionActionState, type SubmissionValues } from "@/app/submit/actions";
+import { initialCategoryMode, type SubmissionCategory } from "@/lib/submissions/form";
 import { SUBMISSION_LIMITS } from "@/lib/submissions/validation";
 
-export type SubmissionCategory = { id: string; name: string };
+export type { SubmissionCategory } from "@/lib/submissions/form";
 
 function FieldError({ message }: { message?: string }) {
   return message ? <span className="field-error">{message}</span> : null;
@@ -27,11 +28,16 @@ const emptyValues: SubmissionValues = {
   name: "", url: "", categoryMode: "existing", categoryId: "", requestedCategory: "", requestedCategoryDescription: "", description: "", fullDescription: "", contactEmail: "", ownershipConfirmed: false, termsAccepted: false,
 };
 
+const initialSubmissionState: SubmissionActionState = { errors: {} };
+
 export function SubmissionForm({ categories, initialValues, defaultEmail = "", listingId, isRevision = false }: { categories: SubmissionCategory[]; initialValues?: SubmissionValues; defaultEmail?: string; listingId?: string; isRevision?: boolean }) {
   initialValues ??= { ...emptyValues, contactEmail: defaultEmail };
   const [state, formAction] = useActionState(saveSubmissionAction, initialSubmissionState);
   const values = state.values ?? initialValues;
-  const [categoryMode, setCategoryMode] = useState<"existing" | "request">(values.categoryMode);
+  const categoriesAvailable = categories.length > 0;
+  const [categoryMode, setCategoryMode] = useState<"existing" | "request">(
+    initialCategoryMode(categories, values.categoryMode),
+  );
   const [descriptionLength, setDescriptionLength] = useState(values.description.length);
 
   return (
@@ -68,9 +74,10 @@ export function SubmissionForm({ categories, initialValues, defaultEmail = "", l
       <fieldset className="category-choice">
         <legend>Category</legend>
         <div className="choice-tabs">
-          <label><input type="radio" name="categoryMode" value="existing" checked={categoryMode === "existing"} onChange={() => setCategoryMode("existing")} /> Choose existing</label>
+          <label><input type="radio" name="categoryMode" value="existing" checked={categoryMode === "existing"} onChange={() => setCategoryMode("existing")} disabled={!categoriesAvailable} /> Choose existing</label>
           <label><input type="radio" name="categoryMode" value="request" checked={categoryMode === "request"} onChange={() => setCategoryMode("request")} /> Request a new category</label>
         </div>
+        {!categoriesAvailable && <p className="form-alert">No categories are available yet. Request a category for this website.</p>}
         {categoryMode === "existing" ? (
           <div className="form-field">
             <label htmlFor="category-id">Closest category</label>

@@ -26,8 +26,6 @@ export type SubmissionActionState = {
   values?: SubmissionValues;
 };
 
-export const initialSubmissionState: SubmissionActionState = { errors: {} };
-
 function field(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
 }

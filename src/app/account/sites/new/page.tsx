@@ -1,1 +1,7 @@
-export { default, metadata } from "@/app/submit/page";
+import { newSiteMetadata, renderNewSitePage } from "@/app/submit/NewSitePage";
+
+export const metadata = newSiteMetadata;
+
+export default function NewAccountSitePage() {
+  return renderNewSitePage({ returnTo: "/account/sites/new", logPrefix: "[new-site]" });
+}

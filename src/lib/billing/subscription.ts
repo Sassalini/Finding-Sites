@@ -8,15 +8,47 @@ export function trialsEnabled() {
   return process.env.STRIPE_TRIALS_ENABLED === "true";
 }
 
-export async function getListingEntitlement(supabase: SupabaseClient<Database>, ownerId: string) {
-  const [{ data: subscription }, { data: listings }] = await Promise.all([
+type EntitlementOptions = { logPrefix?: string };
+
+function databaseError(error: { code?: string; message?: string; details?: string; hint?: string }) {
+  return {
+    code: error.code,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+  };
+}
+
+export async function getListingEntitlement(
+  supabase: SupabaseClient<Database>,
+  ownerId: string,
+  { logPrefix }: EntitlementOptions = {},
+) {
+  if (logPrefix) console.info(`${logPrefix} loading entitlement`);
+  if (logPrefix) console.info(`${logPrefix} loading existing listing count`);
+
+  const [subscriptionResult, listingsResult] = await Promise.all([
     supabase.from("billing_subscriptions")
       .select("status,cancel_at_period_end,current_period_start,current_period_end,canceled_at,ended_at,grace_period_end,stripe_customer_id,stripe_subscription_id,stripe_price_id")
       .eq("owner_id", ownerId)
       .maybeSingle(),
     supabase.from("website_listings").select("status,deleted_at").eq("owner_id", ownerId),
   ]);
+
+  if (subscriptionResult.error) {
+    if (logPrefix) console.error(`${logPrefix} entitlement query failed`, databaseError(subscriptionResult.error));
+    throw new Error("Listing entitlement query failed.", { cause: subscriptionResult.error });
+  }
+  if (listingsResult.error) {
+    if (logPrefix) console.error(`${logPrefix} listing-count query failed`, databaseError(listingsResult.error));
+    throw new Error("Existing listing-count query failed.", { cause: listingsResult.error });
+  }
+
+  const subscription = subscriptionResult.data;
+  const listings = listingsResult.data;
   const listingCount = (listings ?? []).filter((listing) => isCountableListing(listing.status, listing.deleted_at)).length;
+  if (logPrefix) console.info(`${logPrefix} entitlement loaded`, { found: Boolean(subscription) });
+  if (logPrefix) console.info(`${logPrefix} existing listing count loaded`, { listingCount });
   const hasQualifyingSubscription = qualifiesForNewSubmissions(subscription?.status ?? null, trialsEnabled());
   const hasCurrentPublicAccess = retainsPublicAccess(
     subscription?.status ?? null,
