@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { categories } from "@/data/categories";
 import { Icon } from "@/components/ui/Icon";
 import { directoryHref } from "@/lib/directory/urls";
-import type { DirectoryFilters, SortMode } from "@/types/directory";
+import type { DirectoryCategory, DirectoryFilters, SortMode } from "@/types/directory";
 
 const sortOptions: Array<{ value: SortMode; label: string; icon: string }> = [
   { value: "az", label: "A–Z", icon: "sort" },
@@ -13,7 +12,7 @@ const sortOptions: Array<{ value: SortMode; label: string; icon: string }> = [
   { value: "random", label: "Random Order", icon: "shuffle" },
 ];
 
-export function CategorySidebar({ activeCategorySlug, pathname, filters, mobile = false }: { activeCategorySlug?: string; pathname: string; filters: DirectoryFilters; mobile?: boolean }) {
+export function CategorySidebar({ categories, activeCategorySlug, pathname, filters, mobile = false }: { categories: DirectoryCategory[]; activeCategorySlug?: string; pathname: string; filters: DirectoryFilters; mobile?: boolean }) {
   return (
     <div className={mobile ? "sidebar-stack sidebar-stack-mobile" : "sidebar-stack"}>
       <section className="sidebar-card category-card" aria-labelledby={mobile ? "mobile-category-heading" : "category-heading"}>
@@ -22,7 +21,7 @@ export function CategorySidebar({ activeCategorySlug, pathname, filters, mobile 
           {categories.map((category) => (
             <li key={category.slug}>
               <Link href={`/category/${category.slug}`} className={activeCategorySlug === category.slug ? "active" : undefined} aria-current={activeCategorySlug === category.slug ? "page" : undefined}>
-                <Icon name={category.iconKey} />
+                <Icon name="folder" />
                 <span>{category.name}</span>
                 <small>{category.approvedCount}</small>
               </Link>

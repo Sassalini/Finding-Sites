@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { DirectoryPage } from "@/components/directory/DirectoryPage";
-import { getCategory } from "@/data/categories";
+import { getDirectoryCategory } from "@/lib/directory/repository";
 import { parseDirectoryFilters, type SearchParamRecord } from "@/lib/directory/urls";
 
 type CategoryPageProps = { params: Promise<{ slug: string }>; searchParams: Promise<SearchParamRecord> };
 
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const { slug } = await params;
-  const category = getCategory(slug);
+  const category = await getDirectoryCategory(slug);
   if (!category) notFound();
   return {
     title: category.name,
@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
 
 export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const category = getCategory(slug);
+  const category = await getDirectoryCategory(slug);
   if (!category) notFound();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const breadcrumbJsonLd = {

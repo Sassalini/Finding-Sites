@@ -3,8 +3,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { SubmissionForm } from "@/app/submit/SubmissionForm";
 import type { SubmissionValues } from "@/app/submit/actions";
+import { getActiveCategories } from "@/lib/categories/active";
 import { safeServerError } from "@/lib/server-errors";
-import { toSubmissionCategories } from "@/lib/submissions/form";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Edit submission", robots: { index: false, follow: false } };
@@ -16,12 +16,19 @@ export default async function EditSubmissionPage({ params }: { params: Promise<{
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/submit/${id}`);
 
-  const [listingResult, categoryResult] = await Promise.all([
-    supabase.from("website_listings").select("id,owner_id,name,url,category_id,category_request_id,short_description,contact_email,ownership_confirmed,terms_accepted,status").eq("id", id).maybeSingle(),
-    supabase.from("categories").select("id,name,sort_order").eq("is_active", true).order("sort_order", { ascending: true }).order("name", { ascending: true }),
-  ]);
-  if (listingResult.error || categoryResult.error) {
-    console.error("[edit-submission] load failed", safeServerError(listingResult.error ?? categoryResult.error));
+  let listingResult;
+  let categories;
+  try {
+    [listingResult, categories] = await Promise.all([
+      supabase.from("website_listings").select("id,owner_id,name,url,category_id,category_request_id,short_description,contact_email,ownership_confirmed,terms_accepted,status").eq("id", id).maybeSingle(),
+      getActiveCategories(supabase),
+    ]);
+  } catch (error) {
+    console.error("[edit-submission] load failed", safeServerError(error));
+    return <main className="account-shell account-shell-narrow" id="main-content"><section className="form-card confirmation-card" role="alert"><h1>We couldn’t load your website draft.</h1><p>Please try again from your account.</p><Link className="button button-secondary" href="/account">Back to account</Link></section></main>;
+  }
+  if (listingResult.error) {
+    console.error("[edit-submission] listing query failed", safeServerError(listingResult.error));
     return <main className="account-shell account-shell-narrow" id="main-content"><section className="form-card confirmation-card" role="alert"><h1>We couldn’t load your website draft.</h1><p>Please try again from your account.</p><Link className="button button-secondary" href="/account">Back to account</Link></section></main>;
   }
   const listing = listingResult.data;
@@ -68,7 +75,7 @@ export default async function EditSubmissionPage({ params }: { params: Promise<{
   return (
     <main className="account-shell" id="main-content">
       <header className="account-heading"><span className="eyebrow">{isRevision ? "Pending revision" : "Website submission"}</span><h1>{isRevision ? "Propose listing changes" : "Edit your submission"}</h1><p>{isRevision ? "Your approved listing stays live and unchanged while this revision is reviewed." : "Update the details, then save a draft or resubmit it for review."}</p></header>
-      <div className="form-card"><SubmissionForm categories={toSubmissionCategories(categoryResult.data)} initialValues={initialValues} listingId={listing.id} isRevision={isRevision} /></div>
+      <div className="form-card"><SubmissionForm categories={categories} initialValues={initialValues} listingId={listing.id} isRevision={isRevision} /></div>
     </main>
   );
 }

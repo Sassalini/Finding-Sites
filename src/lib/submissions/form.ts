@@ -1,4 +1,6 @@
-export type SubmissionCategory = { id: string; name: string };
+import type { ActiveCategory } from "@/lib/categories/active";
+
+export type SubmissionCategory = ActiveCategory;
 
 export type CategoryMode = "existing" | "request";
 
@@ -7,15 +9,6 @@ export type CategoryChoice = {
   requestedCategory: string;
   requestedCategoryDescription: string;
 };
-
-type CategoryRow = { id?: unknown; name?: unknown };
-
-export function toSubmissionCategories(rows: readonly CategoryRow[] | null): SubmissionCategory[] {
-  return (rows ?? []).flatMap((category) => {
-    if (typeof category.id !== "string" || typeof category.name !== "string") return [];
-    return [{ id: category.id, name: category.name }];
-  });
-}
 
 export function initialCategoryMode(
   categories: readonly SubmissionCategory[],

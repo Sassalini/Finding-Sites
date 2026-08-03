@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCategory } from "../src/data/categories";
+import { ActiveCategoriesLoadError } from "../src/lib/categories/active";
 import { searchPublishedListings } from "../src/lib/directory/published";
 import type { Database } from "../src/types/database";
 import type { DirectoryFilters } from "../src/types/directory";
@@ -17,15 +17,16 @@ const businessFilters: DirectoryFilters = {
 function fakeSupabase(results: Record<string, { data: unknown; error: unknown }>) {
   return {
     from(table: string) {
-      return {
-        select() {
-          return {
-            eq() {
-              return Promise.resolve(results[table]);
-            },
-          };
+      let orderCount = 0;
+      const chain = {
+        select() { return chain; },
+        eq() { return table === "categories" ? chain : Promise.resolve(results[table]); },
+        order() {
+          orderCount += 1;
+          return orderCount === 2 ? Promise.resolve(results[table]) : chain;
         },
       };
+      return chain;
     },
   } as unknown as SupabaseClient<Database>;
 }
@@ -33,7 +34,7 @@ function fakeSupabase(results: Record<string, { data: unknown; error: unknown }>
 test("a valid category with no approved listings returns an empty result", async () => {
   const supabase = fakeSupabase({
     website_listings: { data: [], error: null },
-    categories: { data: [{ id: "category-1", name: "Business & Services", slug: "business-services" }], error: null },
+    categories: { data: [{ id: "category-1", name: "Business & Services", slug: "business-services", sort_order: 1 }], error: null },
   });
 
   const result = await searchPublishedListings(supabase, businessFilters);
@@ -59,7 +60,7 @@ test("a valid category returns its approved listings", async () => {
       }],
       error: null,
     },
-    categories: { data: [{ id: "category-1", name: "Business & Services", slug: "business-services" }], error: null },
+    categories: { data: [{ id: "category-1", name: "Business & Services", slug: "business-services", sort_order: 1 }], error: null },
   });
 
   const result = await searchPublishedListings(supabase, businessFilters);
@@ -70,8 +71,8 @@ test("a valid category returns its approved listings", async () => {
 });
 
 test("an unknown category is rejected by the route with notFound", () => {
-  assert.equal(getCategory("not-a-real-category"), undefined);
   const route = readFileSync("src/app/category/[slug]/page.tsx", "utf8");
+  assert.equal(route.match(/await getDirectoryCategory\(slug\)/g)?.length, 2);
   assert.equal(route.match(/if \(!category\) notFound\(\)/g)?.length, 2);
   assert.doesNotMatch(route, /generateStaticParams/);
 });
@@ -94,21 +95,15 @@ test("a category query error is logged safely and rethrown unchanged", async () 
   try {
     await assert.rejects(
       () => searchPublishedListings(supabase, businessFilters),
-      (error) => error === categoryError,
+      (error) => error instanceof ActiveCategoriesLoadError && error.queryError === categoryError,
     );
   } finally {
     console.error = originalConsoleError;
   }
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.[0], "[directory-query]");
+  assert.equal(calls[0]?.[0], "[categories] failed to load active categories");
   assert.deepEqual(calls[0]?.[1], {
-    operation: "active-categories.select",
-    categorySlug: "business-services",
-    code: "42P01",
-    message: "relation does not exist",
-    details: "database detail",
-    hint: "database hint",
-    stack: null,
+    code: "42P01", message: "relation does not exist", details: "database detail", hint: "database hint",
   });
 });

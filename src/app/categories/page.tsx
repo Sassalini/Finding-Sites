@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
-import { categories } from "@/data/categories";
+import { getDirectoryCategories } from "@/lib/directory/repository";
 
 export const metadata: Metadata = { title: "Browse Categories", description: "Browse Finding Sites by topic and industry.", alternates: { canonical: "/categories" } };
 
-export default function CategoriesPage() {
+export default async function CategoriesPage() {
+  const categories = await getDirectoryCategories();
   return (
     <main className="categories-page" id="main-content">
       <header>
@@ -16,8 +17,8 @@ export default function CategoriesPage() {
       <div className="category-grid">
         {categories.map((category) => (
           <Link href={`/category/${category.slug}`} key={category.slug}>
-            <span><Icon name={category.iconKey} /></span>
-            <div><h2>{category.name}</h2><p>{category.description}</p><small>{category.approvedCount} approved listings</small></div>
+            <span><Icon name="folder" /></span>
+            <div><h2>{category.name}</h2><p>Browse approved websites in {category.name}.</p><small>{category.approvedCount} approved listings</small></div>
           </Link>
         ))}
       </div>

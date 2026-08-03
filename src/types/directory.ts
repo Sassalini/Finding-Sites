@@ -19,6 +19,14 @@ export interface Category {
   approvedCount: number;
 }
 
+export interface DirectoryCategory {
+  id: string;
+  name: string;
+  slug: string;
+  sortOrder: number;
+  approvedCount: number;
+}
+
 export interface DirectoryListing {
   id: string;
   name: string;

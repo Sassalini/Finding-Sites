@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect, unstable_rethrow } from "next/navigation";
 import { SubmissionForm } from "@/app/submit/SubmissionForm";
 import { getListingEntitlement } from "@/lib/billing/subscription";
-import { toSubmissionCategories } from "@/lib/submissions/form";
+import { getActiveCategories } from "@/lib/categories/active";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 export const newSiteMetadata: Metadata = {
@@ -66,6 +66,19 @@ function NewSiteLoadError() {
   );
 }
 
+function CategoryLoadError({ returnTo }: { returnTo: NewSitePageOptions["returnTo"] }) {
+  return (
+    <main className="account-shell account-shell-narrow" id="main-content">
+      <section className="form-card confirmation-card" role="alert">
+        <span className="eyebrow">Website submission</span>
+        <h1>We couldn’t load the available categories. Please try again.</h1>
+        <p>The submission form has not treated this as an empty category list.</p>
+        <a href={returnTo} className="button button-accent">Reload categories</a>
+      </section>
+    </main>
+  );
+}
+
 export async function renderNewSitePage({ returnTo, logPrefix }: NewSitePageOptions) {
   console.info(`${logPrefix} render started`);
 
@@ -110,19 +123,12 @@ export async function renderNewSitePage({ returnTo, logPrefix }: NewSitePageOpti
     }
 
     console.info(`${logPrefix} loading categories`);
-    const categoryResult = await supabase
-      .from("categories")
-      .select("id,name,slug,is_active,sort_order")
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .order("name", { ascending: true });
-
-    if (categoryResult.error) {
-      console.error(`${logPrefix} category query failed`, safeError(categoryResult.error));
-      throw new Error("Active category query failed.", { cause: categoryResult.error });
+    let categories;
+    try {
+      categories = await getActiveCategories(supabase);
+    } catch {
+      return <CategoryLoadError returnTo={returnTo} />;
     }
-
-    const categories = toSubmissionCategories(categoryResult.data);
     console.info(`${logPrefix} categories loaded`, { categoryCount: categories.length });
     if (categories.length === 0) console.info(`${logPrefix} no active categories; enabling category request mode`);
 

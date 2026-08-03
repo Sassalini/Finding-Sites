@@ -1,29 +1,19 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { categoryChoiceError, initialCategoryMode, switchCategoryMode, toSubmissionCategories } from "../src/lib/submissions/form";
+import { categoryChoiceError, initialCategoryMode, switchCategoryMode } from "../src/lib/submissions/form";
 
-test("active categories are converted to plain serializable form props", () => {
-  const categories = toSubmissionCategories([
-    { id: "category-1", name: "Business & Services" },
-  ]);
+test("plain active-category data selects the existing-category mode", () => {
+  const categories = [
+    { id: "category-1", name: "Business & Services", slug: "business-services", sort_order: 1 },
+  ];
 
-  assert.deepEqual(categories, [{ id: "category-1", name: "Business & Services" }]);
+  assert.deepEqual(categories, [{ id: "category-1", name: "Business & Services", slug: "business-services", sort_order: 1 }]);
   assert.equal(initialCategoryMode(categories, "existing"), "existing");
 });
 
 test("an empty category result safely selects category request mode", () => {
-  assert.deepEqual(toSubmissionCategories([]), []);
-  assert.deepEqual(toSubmissionCategories(null), []);
   assert.equal(initialCategoryMode([], "existing"), "request");
-});
-
-test("nullable or malformed category rows are not sent to the client", () => {
-  assert.deepEqual(toSubmissionCategories([
-    { id: "category-1", name: null },
-    { id: null, name: "Missing ID" },
-    { id: "category-2", name: "Education" },
-  ]), [{ id: "category-2", name: "Education" }]);
 });
 
 test("switching category modes clears values from the conflicting mode", () => {
@@ -51,4 +41,17 @@ test("the form renders both category modes and keeps URL directly after the name
   assert.ok(form.indexOf("website-url") > form.indexOf("website-name"));
   assert.ok(form.indexOf("website-url") < form.indexOf("category-choice"));
   assert.doesNotMatch(form, /fullDescription|Longer description/);
+});
+
+test("the selected category UUID is read and validated by the server action", () => {
+  const action = readFileSync("src/app/submit/actions.ts", "utf8");
+  assert.match(action, /categoryId: field\(formData, "categoryId"\)/);
+  assert.match(action, /eq\("id", values\.categoryId\)\.eq\("is_active", true\)/);
+});
+
+test("category loading failures have a reload message instead of the empty-state message", () => {
+  const page = readFileSync("src/app/submit/NewSitePage.tsx", "utf8");
+  assert.match(page, /We couldn’t load the available categories\. Please try again\./);
+  assert.match(page, /Reload categories/);
+  assert.match(page, /getActiveCategories\(supabase\)/);
 });

@@ -5,12 +5,12 @@ import { DirectoryContent } from "@/components/directory/DirectoryContent";
 import { DirectoryStats } from "@/components/directory/DirectoryStats";
 import { DirectoryToolbar } from "@/components/directory/DirectoryToolbar";
 import { Icon } from "@/components/ui/Icon";
-import { getDirectoryResult } from "@/lib/directory/repository";
+import { getDirectoryPageData } from "@/lib/directory/repository";
 import type { Category, DirectoryFilters } from "@/types/directory";
 import Link from "next/link";
 
 export async function DirectoryPage({ filters, pathname, category, heading, intro }: { filters: DirectoryFilters; pathname: string; category?: Category; heading?: string; intro?: string }) {
-  const result = await getDirectoryResult(filters);
+  const { result, categories } = await getDirectoryPageData(filters);
   const pageHeading = heading ?? category?.name ?? "All Websites";
   const pageIntro = intro ?? category?.description ?? "Explore useful independent websites, clearly organised and open to everyone.";
 
@@ -20,7 +20,7 @@ export async function DirectoryPage({ filters, pathname, category, heading, intr
       <div className="directory-frame">
         <DesktopSideAdSlot />
         <aside className="directory-sidebar" aria-label="Directory controls">
-          <CategorySidebar activeCategorySlug={category?.slug} pathname={pathname} filters={filters} />
+          <CategorySidebar categories={categories} activeCategorySlug={category?.slug} pathname={pathname} filters={filters} />
         </aside>
 
         <main className="directory-main" id="main-content">
@@ -35,7 +35,7 @@ export async function DirectoryPage({ filters, pathname, category, heading, intr
 
           <details className="mobile-directory-controls">
             <summary><span><Icon name="sort" />Categories & sorting</span><small>Open controls</small></summary>
-            <CategorySidebar activeCategorySlug={category?.slug} pathname={pathname} filters={filters} mobile />
+            <CategorySidebar categories={categories} activeCategorySlug={category?.slug} pathname={pathname} filters={filters} mobile />
           </details>
 
           <DirectoryToolbar filters={filters} pathname={pathname} categoryName={category?.name} />
