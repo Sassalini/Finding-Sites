@@ -14,3 +14,6 @@ Finding Sites treats the browser as untrusted.
 - The two-listing plan is protected twice: the server checks entitlement for useful feedback, while a PostgreSQL trigger takes an account-scoped transaction lock before counting slots so concurrent inserts cannot exceed the limit.
 - Recurring payment failures receive a seven-day visibility grace period. The public listing policy checks entitlement without exposing subscription records, and ended subscriptions move approved content to `subscription_inactive` for reversible restoration.
 - Before enabling crawler previews or metadata fetching, block loopback, private, link-local and cloud-metadata IP ranges to prevent SSRF.
+# Deprecated listing field
+
+`website_listings.full_description` and `listing_revisions.full_description` remain nullable database columns for backwards compatibility with existing records. The application no longer reads, validates, writes, reviews, or publishes either field.

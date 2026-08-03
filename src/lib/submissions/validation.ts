@@ -3,12 +3,11 @@ export const SUBMISSION_LIMITS = {
   nameMax: 120,
   descriptionMin: 20,
   descriptionMax: 240,
-  fullDescriptionMax: 5000,
   requestedCategoryMin: 2,
   requestedCategoryMax: 80,
 } as const;
 
-export type SubmissionField = "name" | "url" | "category" | "requestedCategory" | "description" | "fullDescription" | "contactEmail" | "ownership" | "terms" | "form";
+export type SubmissionField = "name" | "url" | "category" | "requestedCategory" | "description" | "contactEmail" | "ownership" | "terms" | "form";
 export type SubmissionErrors = Partial<Record<SubmissionField, string>>;
 
 export type NormalizedWebsiteUrl = {

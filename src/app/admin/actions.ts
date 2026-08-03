@@ -67,13 +67,13 @@ export async function moderateRevisionAction(formData: FormData) {
   const revisionId = String(formData.get("revisionId") ?? "");
   const intent = String(formData.get("intent") ?? "");
   const { data: { user } } = await supabase.auth.getUser();
-  const { data: revision } = await supabase.from("listing_revisions").select("id,listing_id,category_id,category_request_id,name,url,normalized_domain,short_description,full_description,contact_email,status").eq("id", revisionId).eq("status", "pending_review").maybeSingle();
+  const { data: revision } = await supabase.from("listing_revisions").select("id,listing_id,category_id,category_request_id,name,url,normalized_domain,short_description,contact_email,status").eq("id", revisionId).eq("status", "pending_review").maybeSingle();
   if (!revision || !user) redirect("/admin?error=revision");
   const now = new Date().toISOString();
   if (intent === "approve") {
     const categoryId = revision.category_id ?? String(formData.get("categoryId") ?? "");
     if (!categoryId) redirect("/admin?error=category");
-    const { error: listingError } = await supabase.from("website_listings").update({ category_id: categoryId, category_request_id: null, name: revision.name, url: revision.url, normalized_domain: revision.normalized_domain, short_description: revision.short_description, full_description: revision.full_description, contact_email: revision.contact_email, updated_at: now }).eq("id", revision.listing_id).eq("status", "approved");
+    const { error: listingError } = await supabase.from("website_listings").update({ category_id: categoryId, category_request_id: null, name: revision.name, url: revision.url, normalized_domain: revision.normalized_domain, short_description: revision.short_description, contact_email: revision.contact_email, updated_at: now }).eq("id", revision.listing_id).in("status", ["approved", "subscription_inactive"]);
     if (listingError) redirect("/admin?error=revision");
     await supabase.from("listing_revisions").update({ status: "approved", reviewed_at: now, reviewed_by: user.id, review_notes: "Approved" }).eq("id", revision.id);
   } else {

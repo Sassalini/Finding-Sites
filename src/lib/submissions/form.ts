@@ -1,5 +1,13 @@
 export type SubmissionCategory = { id: string; name: string };
 
+export type CategoryMode = "existing" | "request";
+
+export type CategoryChoice = {
+  categoryId: string;
+  requestedCategory: string;
+  requestedCategoryDescription: string;
+};
+
 type CategoryRow = { id?: unknown; name?: unknown };
 
 export function toSubmissionCategories(rows: readonly CategoryRow[] | null): SubmissionCategory[] {
@@ -11,7 +19,30 @@ export function toSubmissionCategories(rows: readonly CategoryRow[] | null): Sub
 
 export function initialCategoryMode(
   categories: readonly SubmissionCategory[],
-  requestedMode: "existing" | "request",
+  requestedMode: CategoryMode,
 ) {
   return categories.length > 0 ? requestedMode : "request";
+}
+
+export function switchCategoryMode(choice: CategoryChoice, mode: CategoryMode): CategoryChoice {
+  return mode === "existing"
+    ? { ...choice, requestedCategory: "", requestedCategoryDescription: "" }
+    : { ...choice, categoryId: "" };
+}
+
+export function categoryChoiceError(mode: CategoryMode, choice: CategoryChoice) {
+  const hasExistingCategory = choice.categoryId.length > 0;
+  const hasRequestedCategory = choice.requestedCategory.length > 0;
+
+  if (hasExistingCategory && hasRequestedCategory) {
+    return "Choose an existing category or request a new one, not both.";
+  }
+  if (!hasExistingCategory && !hasRequestedCategory) {
+    return mode === "existing"
+      ? "Choose the closest existing category."
+      : "Enter a requested category name.";
+  }
+  if (mode === "existing" && !hasExistingCategory) return "Choose the closest existing category.";
+  if (mode === "request" && !hasRequestedCategory) return "Enter a requested category name.";
+  return null;
 }

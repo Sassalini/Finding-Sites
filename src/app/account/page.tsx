@@ -6,6 +6,7 @@ import { DeleteDialog } from "@/app/account/DeleteDialog";
 import { ProfileForm } from "@/app/account/ProfileForm";
 import { logoutAction } from "@/app/login/actions";
 import { getListingEntitlement } from "@/lib/billing/subscription";
+import { safeServerError } from "@/lib/server-errors";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { ListingRevisionStatus, ListingStatus } from "@/types/database";
 
@@ -37,6 +38,10 @@ function formatDate(value: string | null) {
   return value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium" }).format(new Date(value)) : "—";
 }
 
+function AccountLoadError() {
+  return <main className="account-shell account-shell-narrow" id="main-content"><section className="form-card confirmation-card" role="alert"><h1>We couldn’t load your website submissions.</h1><p>Please refresh the page and try again.</p><Link className="button button-secondary" href="/">Back to Finding Sites</Link></section></main>;
+}
+
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ error?: string; billing?: string }> }) {
   const query = await searchParams;
   const supabase = await getSupabaseServerClient();
@@ -44,14 +49,33 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/account");
 
-  const [{ data: profile }, { data: listings }, { data: revisions }, entitlement] = await Promise.all([
-    supabase.from("profiles").select("display_name,deletion_requested_at,stripe_customer_id").eq("id", user.id).maybeSingle(),
-    supabase.from("website_listings").select("id,name,url,normalized_domain,category_id,status,rejection_reason,submitted_at,approved_at,updated_at").eq("owner_id", user.id).neq("status", "deleted").order("updated_at", { ascending: false }),
-    supabase.from("listing_revisions").select("id,listing_id,name,status,rejection_reason,created_at").eq("owner_id", user.id).order("created_at", { ascending: false }),
-    getListingEntitlement(supabase, user.id),
-  ]);
+  let accountData;
+  try {
+    accountData = await Promise.all([
+      supabase.from("profiles").select("display_name,deletion_requested_at,stripe_customer_id").eq("id", user.id).maybeSingle(),
+      supabase.from("website_listings").select("id,name,url,normalized_domain,category_id,status,rejection_reason,submitted_at,approved_at,updated_at").eq("owner_id", user.id).neq("status", "deleted").order("updated_at", { ascending: false }),
+      supabase.from("listing_revisions").select("id,listing_id,name,status,rejection_reason,created_at").eq("owner_id", user.id).order("created_at", { ascending: false }),
+      getListingEntitlement(supabase, user.id, { logPrefix: "[account]" }),
+    ]);
+  } catch (loadError) {
+    console.error("[account] data load failed", safeServerError(loadError));
+    return <AccountLoadError />;
+  }
+  const [profileResult, listingsResult, revisionsResult, entitlement] = accountData;
+  if (profileResult.error || listingsResult.error || revisionsResult.error) {
+    console.error("[account] query failed", safeServerError(profileResult.error ?? listingsResult.error ?? revisionsResult.error));
+    return <AccountLoadError />;
+  }
+  const profile = profileResult.data;
+  const listings = listingsResult.data;
+  const revisions = revisionsResult.data;
   const categoryIds = [...new Set((listings ?? []).flatMap((listing) => listing.category_id ? [listing.category_id] : []))];
-  const { data: categories } = categoryIds.length ? await supabase.from("categories").select("id,name").in("id", categoryIds) : { data: [] };
+  const categoryResult = categoryIds.length ? await supabase.from("categories").select("id,name").in("id", categoryIds) : { data: [], error: null };
+  if (categoryResult.error) {
+    console.error("[account] category query failed", safeServerError(categoryResult.error));
+    return <AccountLoadError />;
+  }
+  const categories = categoryResult.data;
   const categoriesById = new Map((categories ?? []).map((category) => [category.id, category.name]));
   const revisionsByListing = new Map<string, NonNullable<typeof revisions>>();
   for (const revision of revisions ?? []) revisionsByListing.set(revision.listing_id, [...(revisionsByListing.get(revision.listing_id) ?? []), revision]);
@@ -72,10 +96,37 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
       </section>
 
       <section id="sites">
-        {!listings?.length ? <div className="account-empty"><h2>You have not added any websites yet.</h2><p>Your first listing is saved as a draft before any subscription checkout.</p><Link className="button button-accent" href="/account/sites/new">Add Your First Site</Link></div> : <div className="submission-list">{listings.map((listing) => {
-          const editable = ["draft", "pending_review", "changes_requested", "approved"].includes(listing.status);
-          return <article className="submission-item" key={listing.id}><div className="submission-item-main"><div className="submission-title-line"><h2>{listing.name}</h2><span className={`status-badge status-${listing.status}`}><span aria-hidden="true">●</span> {statusLabels[listing.status]}</span></div><a href={listing.url} target="_blank" rel="noreferrer">{listing.normalized_domain}</a><p>{categoriesById.get(listing.category_id ?? "") ?? "Requested category"} · Submitted {formatDate(listing.submitted_at)}{listing.approved_at ? ` · Approved ${formatDate(listing.approved_at)}` : ""}</p><p className="status-explanation">{statusExplanations[listing.status] ?? "Contact the directory team for information about this status."}</p>{listing.rejection_reason && <div className="rejection-note"><strong>Review feedback</strong><p>{listing.rejection_reason}</p></div>}</div><div className="submission-item-action"><Link href={`/account/sites/${listing.id}`} className="button button-secondary">Preview</Link>{editable && <Link href={`/account/sites/${listing.id}/edit`} className="button button-secondary">{listing.status === "approved" ? "Propose changes" : "Edit"}</Link>}<DeleteDialog listingId={listing.id} listingName={listing.name} /></div>{(revisionsByListing.get(listing.id) ?? []).map((revision) => <div className="revision-row" key={revision.id}><div><strong>Revision: {revision.name}</strong><small>Submitted {formatDate(revision.created_at)}</small>{revision.rejection_reason && <p>{revision.rejection_reason}</p>}</div><span className={`status-badge status-${revision.status}`}>{statusLabels[revision.status]}</span></div>)}</article>;
-        })}</div>}
+        {!listings?.length ? (
+          <div className="account-empty"><h2>You have not added any websites yet.</h2><p>Your first listing is saved as a draft before any subscription checkout.</p><Link className="button button-accent" href="/account/sites/new">Add Your First Site</Link></div>
+        ) : (
+          <div className="submission-list">{listings.map((listing) => {
+            const reviewHref = `/submit/review/${listing.id}`;
+            const editHref = `/account/sites/${listing.id}/edit`;
+            const previewHref = `/account/sites/${listing.id}`;
+            return (
+              <article className="submission-item" key={listing.id}>
+                <div className="submission-item-main">
+                  <div className="submission-title-line"><h2>{listing.name}</h2><span className={`status-badge status-${listing.status}`}><span aria-hidden="true">●</span> {statusLabels[listing.status]}</span></div>
+                  <a href={listing.url} target="_blank" rel="noreferrer">{listing.normalized_domain}</a>
+                  <p>{categoriesById.get(listing.category_id ?? "") ?? "Requested category"} · Submitted {formatDate(listing.submitted_at)}{listing.approved_at ? ` · Approved ${formatDate(listing.approved_at)}` : ""}</p>
+                  <p className="status-explanation">{statusExplanations[listing.status] ?? "Contact the directory team for information about this status."}</p>
+                  {listing.rejection_reason && <div className="rejection-note"><strong>Review feedback</strong><p>{listing.rejection_reason}</p></div>}
+                </div>
+                <div className="submission-item-action">
+                  {listing.status === "draft" && <><Link href={editHref} className="button button-secondary">Edit</Link><Link href={reviewHref} className="button button-accent">{entitlement.hasQualifyingSubscription ? "Submit for Review" : "Continue to Payment"}</Link></>}
+                  {listing.status === "checkout_pending" && <><Link href={reviewHref} className="button button-accent">{entitlement.hasQualifyingSubscription ? "Submit for Review" : "Resume Payment"}</Link><Link href={editHref} className="button button-secondary">Edit</Link></>}
+                  {listing.status === "pending_review" && <><Link href={previewHref} className="button button-secondary">View submission</Link><Link href={editHref} className="button button-secondary">Edit</Link></>}
+                  {listing.status === "approved" && <><a href={listing.url} target="_blank" rel="noreferrer" className="button button-secondary">View live listing</a><Link href={editHref} className="button button-secondary">Propose edits</Link></>}
+                  {listing.status === "changes_requested" && <><Link href={reviewHref} className="button button-accent">Review Required Changes</Link><Link href={editHref} className="button button-secondary">Edit and resubmit</Link></>}
+                  {listing.status === "subscription_inactive" && <><Link href={previewHref} className="button button-secondary">View listing</Link><Link href={editHref} className="button button-secondary">Edit</Link>{(entitlement.stripeCustomerId || profile?.stripe_customer_id) && <form action={createBillingPortalAction}><button className="button button-accent">Reactivate subscription</button></form>}</>}
+                  {["suspended", "rejected", "permanently_rejected", "expired"].includes(listing.status) && <Link href={previewHref} className="button button-secondary">View submission</Link>}
+                  <DeleteDialog listingId={listing.id} listingName={listing.name} />
+                </div>
+                {(revisionsByListing.get(listing.id) ?? []).map((revision) => <div className="revision-row" key={revision.id}><div><strong>Revision: {revision.name}</strong><small>Submitted {formatDate(revision.created_at)}</small>{revision.rejection_reason && <p>{revision.rejection_reason}</p>}</div><span className={`status-badge status-${revision.status}`}>{statusLabels[revision.status]}</span></div>)}
+              </article>
+            );
+          })}</div>
+        )}
       </section>
 
       <section className="form-card account-settings" id="settings"><div><span className="eyebrow">Account settings</span><h2>Account details</h2><p>Changing your email address requires confirmation through Supabase.</p></div><ProfileForm displayName={profile?.display_name ?? ""} email={user.email ?? ""} /></section>
