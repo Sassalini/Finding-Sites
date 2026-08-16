@@ -20,7 +20,9 @@ function fakeSupabase(results: Record<string, { data: unknown; error: unknown }>
       let orderCount = 0;
       const chain = {
         select() { return chain; },
-        eq() { return table === "categories" ? chain : Promise.resolve(results[table]); },
+        eq() { return chain; },
+        is() { return chain; },
+        not() { return Promise.resolve(results[table]); },
         order() {
           orderCount += 1;
           return orderCount === 2 ? Promise.resolve(results[table]) : chain;
@@ -34,7 +36,7 @@ function fakeSupabase(results: Record<string, { data: unknown; error: unknown }>
 test("a valid category with no approved listings returns an empty result", async () => {
   const supabase = fakeSupabase({
     website_listings: { data: [], error: null },
-    categories: { data: [{ id: "category-1", name: "Business & Services", slug: "business-services", sort_order: 1 }], error: null },
+    categories: { data: [{ id: "category-1", name: "Business & Services", slug: "business-services", icon_key: "briefcase", sort_order: 1 }], error: null },
   });
 
   const result = await searchPublishedListings(supabase, businessFilters);
@@ -60,7 +62,7 @@ test("a valid category returns its approved listings", async () => {
       }],
       error: null,
     },
-    categories: { data: [{ id: "category-1", name: "Business & Services", slug: "business-services", sort_order: 1 }], error: null },
+    categories: { data: [{ id: "category-1", name: "Business & Services", slug: "business-services", icon_key: "briefcase", sort_order: 1 }], error: null },
   });
 
   const result = await searchPublishedListings(supabase, businessFilters);

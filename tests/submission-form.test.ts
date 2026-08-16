@@ -5,10 +5,10 @@ import { categoryChoiceError, initialCategoryMode, switchCategoryMode } from "..
 
 test("plain active-category data selects the existing-category mode", () => {
   const categories = [
-    { id: "category-1", name: "Business & Services", slug: "business-services", sort_order: 1 },
+    { id: "category-1", name: "Business & Services", slug: "business-services", icon_key: "briefcase", sort_order: 1 },
   ];
 
-  assert.deepEqual(categories, [{ id: "category-1", name: "Business & Services", slug: "business-services", sort_order: 1 }]);
+  assert.deepEqual(categories, [{ id: "category-1", name: "Business & Services", slug: "business-services", icon_key: "briefcase", sort_order: 1 }]);
   assert.equal(initialCategoryMode(categories, "existing"), "existing");
 });
 
@@ -49,9 +49,21 @@ test("the selected category UUID is read and validated by the server action", ()
   assert.match(action, /eq\("id", values\.categoryId\)\.eq\("is_active", true\)/);
 });
 
+test("draft editing restores the saved category UUID and mode", () => {
+  const editPage = readFileSync("src/app/submit/[id]/page.tsx", "utf8");
+  assert.match(editPage, /categoryMode: listing\.category_request_id \? "request" : "existing"/);
+  assert.match(editPage, /categoryId: listing\.category_id \?\? ""/);
+  assert.match(editPage, /<SubmissionForm categories=\{categories\} initialValues=\{initialValues\}/);
+});
+
 test("category loading failures have a reload message instead of the empty-state message", () => {
   const page = readFileSync("src/app/submit/NewSitePage.tsx", "utf8");
   assert.match(page, /We couldn’t load the available categories\. Please try again\./);
   assert.match(page, /Reload categories/);
   assert.match(page, /getActiveCategories\(supabase\)/);
+});
+
+test("a genuine empty result uses the required request-category message", () => {
+  const form = readFileSync("src/app/submit/SubmissionForm.tsx", "utf8");
+  assert.match(form, /No existing categories are available yet\. You can request one below\./);
 });

@@ -23,6 +23,7 @@ export interface DirectoryCategory {
   id: string;
   name: string;
   slug: string;
+  iconKey: string | null;
   sortOrder: number;
   approvedCount: number;
 }

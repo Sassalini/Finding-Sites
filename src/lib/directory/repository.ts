@@ -21,6 +21,7 @@ function developmentCategories(): DirectoryCategory[] {
       id: listing.categorySlug,
       name: listing.categoryName,
       slug: listing.categorySlug,
+      iconKey: null,
       sortOrder: 0,
       approvedCount: 1,
     });
@@ -65,7 +66,7 @@ export async function getDirectoryCategory(slug: string): Promise<Category | und
     name: category.name,
     slug: category.slug,
     description: `Browse approved websites in ${category.name}.`,
-    iconKey: "folder",
+    iconKey: category.iconKey ?? "folder",
     approvedCount: category.approvedCount,
   };
 }

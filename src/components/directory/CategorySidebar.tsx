@@ -21,14 +21,14 @@ export function CategorySidebar({ categories, activeCategorySlug, pathname, filt
           {categories.map((category) => (
             <li key={category.slug}>
               <Link href={`/category/${category.slug}`} className={activeCategorySlug === category.slug ? "active" : undefined} aria-current={activeCategorySlug === category.slug ? "page" : undefined}>
-                <Icon name="folder" />
+                <Icon name={category.iconKey ?? "folder"} />
                 <span>{category.name}</span>
                 <small>{category.approvedCount}</small>
               </Link>
             </li>
           ))}
         </ul>
-        {activeCategorySlug && <Link href="/" className="show-all-link">View all websites →</Link>}
+        <Link href="/" className="show-all-link">View all websites →</Link>
       </section>
 
       <section className="sidebar-card instruction-card">

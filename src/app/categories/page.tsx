@@ -17,7 +17,7 @@ export default async function CategoriesPage() {
       <div className="category-grid">
         {categories.map((category) => (
           <Link href={`/category/${category.slug}`} key={category.slug}>
-            <span><Icon name="folder" /></span>
+            <span><Icon name={category.iconKey ?? "folder"} /></span>
             <div><h2>{category.name}</h2><p>Browse approved websites in {category.name}.</p><small>{category.approvedCount} approved listings</small></div>
           </Link>
         ))}

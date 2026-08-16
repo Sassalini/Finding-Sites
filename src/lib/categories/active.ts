@@ -5,6 +5,7 @@ export type ActiveCategory = {
   id: string;
   name: string;
   slug: string;
+  icon_key: string | null;
   sort_order: number;
 };
 
@@ -25,7 +26,7 @@ export class ActiveCategoriesLoadError extends Error {
 export async function getActiveCategories(supabase: SupabaseClient<Database>): Promise<ActiveCategory[]> {
   const result = await supabase
     .from("categories")
-    .select("id,name,slug,sort_order")
+    .select("id,name,slug,icon_key,sort_order")
     .eq("is_active", true)
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
@@ -44,6 +45,7 @@ export async function getActiveCategories(supabase: SupabaseClient<Database>): P
     id: category.id,
     name: category.name,
     slug: category.slug,
+    icon_key: category.icon_key,
     sort_order: category.sort_order,
   }));
 }

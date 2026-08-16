@@ -72,7 +72,7 @@ export function SubmissionForm({ categories, initialValues, defaultEmail = "", l
           <label><input type="radio" name="categoryMode" value="existing" checked={categoryMode === "existing"} onChange={() => changeCategoryMode("existing")} disabled={!categoriesAvailable} /> Choose existing</label>
           <label><input type="radio" name="categoryMode" value="request" checked={categoryMode === "request"} onChange={() => changeCategoryMode("request")} /> Request a new category</label>
         </div>
-        {!categoriesAvailable && <p className="form-alert">No categories are available yet. Request a category for this website.</p>}
+        {!categoriesAvailable && <p className="form-alert">No existing categories are available yet. You can request one below.</p>}
         {categoryMode === "existing" ? (
           <div className="form-field">
             <label htmlFor="category-id">Closest category</label>
