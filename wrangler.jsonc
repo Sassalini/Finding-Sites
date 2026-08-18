@@ -4,6 +4,9 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "NEXT_PUBLIC_SITE_URL": "https://findingsites.com"
+  },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"

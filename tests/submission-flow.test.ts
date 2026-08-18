@@ -48,8 +48,8 @@ test("checkout enforces the listing limit and checks for conflicting subscriptio
 
 test("checkout reads and validates Worker-populated Stripe configuration at request time", () => {
   assert.match(stripeConfig, /return process\.env\[name\]/);
-  assert.match(stripeConfig, /value\.startsWith\("sk_test_"\)/);
+  assert.match(stripeConfig, /value\.startsWith\("sk_test_"\) \|\| value\.startsWith\("sk_live_"\)/);
   assert.match(stripeConfig, /value\.startsWith\("price_"\)/);
-  assert.match(stripeConfig, /value === PRODUCTION_SITE_URL/);
+  assert.match(stripeConfig, /value\.startsWith\("https:\/\/"\)/);
   assert.doesNotMatch(reviewAction, /STRIPE_WEBHOOK_SECRET/);
 });

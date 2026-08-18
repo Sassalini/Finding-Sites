@@ -3,9 +3,9 @@
 import { redirect } from "next/navigation";
 import { getListingEntitlement } from "@/lib/billing/subscription";
 import { safeServerError } from "@/lib/server-errors";
-import { getCheckoutConfiguration, logStripeConfigurationDiagnostics } from "@/lib/stripe/config";
+import { getCheckoutConfiguration, getStripeRuntimeConfiguration, logStripeConfigurationDiagnostics } from "@/lib/stripe/config";
 import { getStripeClient } from "@/lib/stripe/server";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { getSupabaseAdminClient, logSupabaseAdminConfigurationDiagnostics } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const resumableStatuses = ["draft", "changes_requested", "checkout_pending"] as const;
@@ -55,6 +55,7 @@ export async function continueSubmissionAction(formData: FormData) {
   }
 
   const admin = getSupabaseAdminClient();
+  logSupabaseAdminConfigurationDiagnostics();
   if (!admin) redirect(`${reviewPath}?error=configuration`);
 
   if (entitlement.hasQualifyingSubscription) {
@@ -72,9 +73,10 @@ export async function continueSubmissionAction(formData: FormData) {
     redirect("/account?billing=attention");
   }
 
-  const checkoutConfig = getCheckoutConfiguration();
+  const stripeRuntimeConfig = getStripeRuntimeConfiguration();
+  const checkoutConfig = getCheckoutConfiguration(stripeRuntimeConfig);
+  logStripeConfigurationDiagnostics(stripeRuntimeConfig);
   if (!checkoutConfig) {
-    logStripeConfigurationDiagnostics();
     redirect(`${reviewPath}?error=configuration`);
   }
   const stripe = getStripeClient();
