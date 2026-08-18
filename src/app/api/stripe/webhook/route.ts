@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { qualifiesForNewSubmissions } from "@/lib/billing/policy";
 import { trialsEnabled } from "@/lib/billing/subscription";
+import { getStripeRuntimeConfiguration, logStripeConfigurationDiagnostics } from "@/lib/stripe/config";
 import { getStripeClient } from "@/lib/stripe/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { SubscriptionStatus } from "@/types/database";
@@ -59,7 +60,7 @@ async function syncSubscription(subscription: Stripe.Subscription, fallbackOwner
   if (!admin) throw new Error("Supabase service role is not configured.");
   const item = subscription.items.data[0];
   const priceId = item?.price.id ?? null;
-  if (!priceId || priceId !== process.env.STRIPE_DIRECTORY_PRICE_ID) return null;
+  if (!priceId || priceId !== getStripeRuntimeConfiguration().directoryPriceId) return null;
 
   const ownerId = await resolveOwnerId(subscription, fallbackOwnerId);
   if (!ownerId) return null;
@@ -132,9 +133,12 @@ function invoiceSubscriptionId(invoice: Stripe.Invoice) {
 export async function POST(request: Request) {
   const stripe = getStripeClient();
   const admin = getSupabaseAdminClient();
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secret = getStripeRuntimeConfiguration().webhookSecret;
   const signature = request.headers.get("stripe-signature");
-  if (!stripe || !admin || !secret || !signature) return NextResponse.json({ error: "Webhook is not configured." }, { status: 503 });
+  if (!stripe || !admin || !secret || !signature) {
+    if (!stripe || !secret) logStripeConfigurationDiagnostics();
+    return NextResponse.json({ error: "Webhook is not configured." }, { status: 503 });
+  }
 
   const payload = await request.text();
   let event: Stripe.Event;

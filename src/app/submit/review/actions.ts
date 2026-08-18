@@ -1,9 +1,9 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getListingEntitlement } from "@/lib/billing/subscription";
 import { safeServerError } from "@/lib/server-errors";
+import { getCheckoutConfiguration, logStripeConfigurationDiagnostics } from "@/lib/stripe/config";
 import { getStripeClient } from "@/lib/stripe/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -72,12 +72,22 @@ export async function continueSubmissionAction(formData: FormData) {
     redirect("/account?billing=attention");
   }
 
+  const checkoutConfig = getCheckoutConfiguration();
+  if (!checkoutConfig) {
+    logStripeConfigurationDiagnostics();
+    redirect(`${reviewPath}?error=configuration`);
+  }
   const stripe = getStripeClient();
-  const priceId = process.env.STRIPE_DIRECTORY_PRICE_ID;
-  if (!stripe || !priceId) redirect(`${reviewPath}?error=configuration`);
+  if (!stripe) {
+    logStripeConfigurationDiagnostics();
+    redirect(`${reviewPath}?error=configuration`);
+  }
 
-  const requestHeaders = await headers();
-  const origin = safeOrigin(process.env.NEXT_PUBLIC_SITE_URL ?? null) ?? safeOrigin(requestHeaders.get("origin")) ?? "http://localhost:3000";
+  const origin = safeOrigin(checkoutConfig.siteUrl);
+  if (!origin) {
+    logStripeConfigurationDiagnostics();
+    redirect(`${reviewPath}?error=configuration`);
+  }
 
   const checkoutResult = await admin.from("stripe_checkout_sessions").select("id")
     .eq("owner_id", user.id).eq("listing_id", listing.id).eq("status", "open").order("created_at", { ascending: false }).limit(1).maybeSingle();
@@ -138,7 +148,7 @@ export async function continueSubmissionAction(formData: FormData) {
   try {
     session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [{ price: checkoutConfig.directoryPriceId, quantity: 1 }],
       success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}${reviewPath}?checkout=cancelled`,
       client_reference_id: listing.id,

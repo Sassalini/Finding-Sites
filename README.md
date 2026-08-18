@@ -87,7 +87,7 @@ Advertising is disabled by default. `DesktopSideAdSlot`, `MobileInlineAdSlot` an
 
 ## Cloudflare deployment
 
-Set `NEXT_PUBLIC_SITE_URL` to the production origin and configure the Supabase and Stripe runtime values in the deployment secret store. `npm run preview` builds and previews the Worker, while `npm run deploy` publishes it through OpenNext and Wrangler.
+Set the Worker variable `NEXT_PUBLIC_SITE_URL=https://findingsites.com`. Configure `STRIPE_SECRET_KEY` (an `sk_test_...` sandbox key), `STRIPE_DIRECTORY_PRICE_ID` (a `price_...` ID), and `STRIPE_WEBHOOK_SECRET` (a `whsec_...` signing secret) as Worker bindings. The webhook secret is checked only when processing incoming webhooks; Checkout creation requires the secret key, Price ID, and canonical site URL. `npm run preview` builds and previews the Worker, while `npm run deploy` publishes it through OpenNext and Wrangler.
 
 OpenNext warns that Windows is not fully supported. In this workspace, the verified PowerShell route maps the project as a drive root and keeps Wrangler configuration inside the project:
 

@@ -6,6 +6,7 @@ const saveAction = readFileSync("src/app/submit/actions.ts", "utf8");
 const reviewAction = readFileSync("src/app/submit/review/actions.ts", "utf8");
 const reviewPage = readFileSync("src/app/submit/review/[id]/page.tsx", "utf8");
 const accountPage = readFileSync("src/app/account/page.tsx", "utf8");
+const stripeConfig = readFileSync("src/lib/stripe/config.ts", "utf8");
 
 test("the initial submission saves one draft before opening the review flow", () => {
   assert.match(saveAction, /const newId = crypto\.randomUUID\(\)/);
@@ -43,4 +44,12 @@ test("an active subscriber bypasses Checkout and submits the existing listing", 
 test("checkout enforces the listing limit and checks for conflicting subscriptions", () => {
   assert.match(reviewAction, /entitlement\.listingCount > entitlement\.listingLimit/);
   assert.match(reviewAction, /stripe\.subscriptions\.list/);
+});
+
+test("checkout reads and validates Worker-populated Stripe configuration at request time", () => {
+  assert.match(stripeConfig, /return process\.env\[name\]/);
+  assert.match(stripeConfig, /value\.startsWith\("sk_test_"\)/);
+  assert.match(stripeConfig, /value\.startsWith\("price_"\)/);
+  assert.match(stripeConfig, /value === PRODUCTION_SITE_URL/);
+  assert.doesNotMatch(reviewAction, /STRIPE_WEBHOOK_SECRET/);
 });

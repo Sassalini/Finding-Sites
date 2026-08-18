@@ -96,3 +96,18 @@ test("the additive RLS policy explicitly covers anonymous and authenticated read
   assert.match(migration, /to anon, authenticated/);
   assert.match(migration, /using \(is_active = true\)/);
 });
+
+test("canonical categories are installed once through the remote migration path", () => {
+  const migration = readFileSync("supabase/migrations/20260816120000_seed_default_categories.sql", "utf8");
+  const seed = readFileSync("supabase/seed.sql", "utf8");
+  const expectedNames = [
+    "Business & Services", "Computers & Internet", "Education", "Entertainment", "Finance",
+    "Health & Fitness", "Hobbies & Interests", "Home & Garden", "Life & Style", "News & Media",
+    "Pets & Animals", "Shopping", "Society & Culture", "Sports & Recreation", "Travel & Tourism",
+  ];
+
+  for (const name of expectedNames) assert.match(migration, new RegExp(name.replace(/[&]/g, "&")));
+  assert.match(migration, /on conflict \(slug\) do update/);
+  assert.doesNotMatch(seed, /insert into public\.categories/);
+  assert.match(seed, /20260816120000_seed_default_categories\.sql/);
+});
