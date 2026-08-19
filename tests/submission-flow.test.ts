@@ -63,8 +63,12 @@ test("Stripe uses fetch transport with an interactive timeout and no automatic r
 });
 
 test("checkout failures return an inline error and reset the pending button", () => {
-  assert.match(reviewAction, /We couldn’t connect to Stripe\. Please try again\./);
+  assert.match(reviewAction, /We couldn’t start checkout\. Please try again\./);
   assert.match(reviewForm, /useActionState\(continueSubmissionAction, initialState\)/);
   assert.match(reviewForm, /disabled=\{pending\}/);
   assert.match(reviewForm, /state\.error/);
+});
+
+test("subscription Checkout explicitly disables Managed Payments", () => {
+  assert.match(reviewAction, /mode: "subscription",\s+managed_payments: \{ enabled: false \}/);
 });

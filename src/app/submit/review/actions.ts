@@ -9,7 +9,7 @@ import { getSupabaseAdminClient, logSupabaseAdminConfigurationDiagnostics } from
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const resumableStatuses = ["draft", "changes_requested", "checkout_pending"] as const;
-const STRIPE_CONNECTION_ERROR = "We couldn’t connect to Stripe. Please try again.";
+const STRIPE_CHECKOUT_ERROR = "We couldn’t start checkout. Please try again.";
 
 export type ContinueSubmissionState = { error?: string };
 
@@ -117,7 +117,7 @@ export async function continueSubmissionAction(
       logPaymentError("stripe.checkout.sessions.retrieve", error);
       retrievalFailed = true;
     }
-    if (retrievalFailed) return { error: STRIPE_CONNECTION_ERROR };
+    if (retrievalFailed) return { error: STRIPE_CHECKOUT_ERROR };
     if (existingUrl) redirect(existingUrl);
   }
 
@@ -136,7 +136,7 @@ export async function continueSubmissionAction(
       stripeCustomerId = customer.id;
     } catch (error) {
       logPaymentError("stripe.customers.create", error);
-      return { error: STRIPE_CONNECTION_ERROR };
+      return { error: STRIPE_CHECKOUT_ERROR };
     }
     const { error } = await admin.from("profiles").update({ stripe_customer_id: stripeCustomerId }).eq("id", user.id);
     if (error) {
@@ -151,7 +151,7 @@ export async function continueSubmissionAction(
     hasConflictingSubscription = subscriptions.data.some((subscription) => ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"].includes(subscription.status));
   } catch (error) {
     logPaymentError("stripe.subscriptions.list", error);
-    return { error: STRIPE_CONNECTION_ERROR };
+    return { error: STRIPE_CHECKOUT_ERROR };
   }
   if (hasConflictingSubscription) redirect("/account?billing=attention");
 
@@ -160,6 +160,7 @@ export async function continueSubmissionAction(
     session = await withStripeTiming("stripe.checkout.sessions.create", () => stripe.checkout.sessions.create(
       {
         mode: "subscription",
+        managed_payments: { enabled: false },
         line_items: [{ price: checkoutConfig.directoryPriceId, quantity: 1 }],
         success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}${reviewPath}?checkout=cancelled`,
@@ -173,7 +174,7 @@ export async function continueSubmissionAction(
     ));
   } catch (error) {
     logPaymentError("stripe.checkout.sessions.create", error);
-    return { error: STRIPE_CONNECTION_ERROR };
+    return { error: STRIPE_CHECKOUT_ERROR };
   }
   if (!session.url) redirect(`${reviewPath}?error=checkout`);
 
