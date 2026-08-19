@@ -10,8 +10,9 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const resumableStatuses = ["draft", "changes_requested", "checkout_pending"] as const;
 const STRIPE_CHECKOUT_ERROR = "We couldn’t start checkout. Please try again.";
+const CHECKOUT_REQUEST_VERSION = "managed-payments-disabled-v1";
 
-export type ContinueSubmissionState = { error?: string };
+export type ContinueSubmissionState = { error?: string; startNewCheckoutAttempt?: boolean };
 
 function safeOrigin(value: string | null) {
   if (!value) return null;
@@ -27,11 +28,32 @@ function logPaymentError(operation: string, error: unknown) {
   console.error("[continue-submission]", { operation, ...safeServerError(error) });
 }
 
+function shouldRetrySameCheckoutAttempt(error: unknown) {
+  if (!error || typeof error !== "object" || !("type" in error)) return false;
+  const type = (error as { type?: unknown }).type;
+  return type === "StripeConnectionError" || type === "StripeAPIError";
+}
+
+function logCheckoutAttempt(
+  listingId: string,
+  checkoutAttemptId: string,
+  existingStripeSessionReused: boolean,
+  newStripeSessionCreated: boolean,
+) {
+  console.info("[stripe-checkout-attempt]", {
+    listingId,
+    checkoutAttemptId,
+    existingStripeSessionReused,
+    newStripeSessionCreated,
+  });
+}
+
 export async function continueSubmissionAction(
   _state: ContinueSubmissionState,
   formData: FormData,
 ): Promise<ContinueSubmissionState> {
   const listingId = String(formData.get("listingId") ?? "");
+  const startNewCheckoutAttempt = String(formData.get("startNewCheckoutAttempt") ?? "false") === "true";
   const reviewPath = `/submit/review/${listingId}`;
   const supabase = await getSupabaseServerClient();
   if (!supabase) redirect(`${reviewPath}?error=configuration`);
@@ -97,28 +119,79 @@ export async function continueSubmissionAction(
     redirect(`${reviewPath}?error=configuration`);
   }
 
-  const checkoutResult = await admin.from("stripe_checkout_sessions").select("id")
-    .eq("owner_id", user.id).eq("listing_id", listing.id).eq("status", "open").order("created_at", { ascending: false }).limit(1).maybeSingle();
-  if (checkoutResult.error) {
-    logPaymentError("stripe_checkout_sessions.select", checkoutResult.error);
+  const attemptResult = await admin.from("stripe_checkout_attempts")
+    .select("checkout_attempt_id,stripe_checkout_session_id,checkout_status,request_version")
+    .eq("owner_id", user.id).eq("listing_id", listing.id)
+    .in("checkout_status", ["creating", "open"])
+    .order("checkout_started_at", { ascending: false }).limit(1).maybeSingle();
+  if (attemptResult.error) {
+    logPaymentError("stripe_checkout_attempts.select", attemptResult.error);
     redirect(`${reviewPath}?error=checkout`);
   }
-  if (checkoutResult.data) {
-    let existingUrl: string | null = null;
-    let retrievalFailed = false;
+  let checkoutAttempt = attemptResult.data;
+
+  if (checkoutAttempt && startNewCheckoutAttempt) {
+    let completedSessionFound = false;
     try {
-      const session = await stripe.checkout.sessions.retrieve(checkoutResult.data.id);
-      if (session.status === "open" && session.url) existingUrl = session.url;
-      else {
-        const { error } = await admin.from("stripe_checkout_sessions").update({ status: "expired" }).eq("id", checkoutResult.data.id);
-        if (error) logPaymentError("stripe_checkout_sessions.expire-stale", error);
+      if (checkoutAttempt.stripe_checkout_session_id) {
+        const priorSession = await stripe.checkout.sessions.retrieve(checkoutAttempt.stripe_checkout_session_id);
+        completedSessionFound = priorSession.status === "complete";
+        if (!completedSessionFound) {
+          if (priorSession.status === "open") await stripe.checkout.sessions.expire(priorSession.id);
+          const { error: sessionError } = await admin.from("stripe_checkout_sessions")
+            .update({ status: "expired" }).eq("id", priorSession.id);
+          if (sessionError) throw sessionError;
+        }
+      }
+      if (!completedSessionFound) {
+        const { error: abandonError } = await admin.from("stripe_checkout_attempts")
+          .update({ checkout_status: "abandoned" })
+          .eq("checkout_attempt_id", checkoutAttempt.checkout_attempt_id);
+        if (abandonError) throw abandonError;
+        checkoutAttempt = null;
+      }
+    } catch (error) {
+      logPaymentError("stripe.checkout.attempt.abandon", error);
+      return { error: STRIPE_CHECKOUT_ERROR, startNewCheckoutAttempt: true };
+    }
+    if (completedSessionFound) redirect("/account?billing=attention");
+  }
+
+  if (checkoutAttempt?.stripe_checkout_session_id) {
+    const currentAttempt = checkoutAttempt;
+    const currentSessionId = checkoutAttempt.stripe_checkout_session_id;
+    let existingUrl: string | null = null;
+    let completedSessionFound = false;
+    try {
+      const existingSession = await stripe.checkout.sessions.retrieve(currentSessionId);
+      if (existingSession.status === "open" && existingSession.url) {
+        existingUrl = existingSession.url;
+      } else {
+        const terminalStatus = existingSession.status === "complete" ? "complete" : "expired";
+        const { error: sessionError } = await admin.from("stripe_checkout_sessions")
+          .update({ status: terminalStatus }).eq("id", existingSession.id);
+        if (sessionError) throw sessionError;
+        const { error: attemptError } = await admin.from("stripe_checkout_attempts")
+          .update({ checkout_status: terminalStatus })
+          .eq("checkout_attempt_id", currentAttempt.checkout_attempt_id);
+        if (attemptError) throw attemptError;
+        checkoutAttempt = null;
+        completedSessionFound = terminalStatus === "complete";
       }
     } catch (error) {
       logPaymentError("stripe.checkout.sessions.retrieve", error);
-      retrievalFailed = true;
+      if (!shouldRetrySameCheckoutAttempt(error)) {
+        await admin.from("stripe_checkout_attempts").update({ checkout_status: "failed" })
+          .eq("checkout_attempt_id", currentAttempt.checkout_attempt_id);
+      }
+      logCheckoutAttempt(listing.id, currentAttempt.checkout_attempt_id, false, false);
+      return { error: STRIPE_CHECKOUT_ERROR, startNewCheckoutAttempt: !shouldRetrySameCheckoutAttempt(error) };
     }
-    if (retrievalFailed) return { error: STRIPE_CHECKOUT_ERROR };
-    if (existingUrl) redirect(existingUrl);
+    if (existingUrl) {
+      logCheckoutAttempt(listing.id, currentAttempt.checkout_attempt_id, true, false);
+      redirect(existingUrl);
+    }
+    if (completedSessionFound) redirect("/account?billing=attention");
   }
 
   const profileResult = await admin.from("profiles").select("stripe_customer_id").eq("id", user.id).single();
@@ -155,6 +228,44 @@ export async function continueSubmissionAction(
   }
   if (hasConflictingSubscription) redirect("/account?billing=attention");
 
+  if (checkoutAttempt && checkoutAttempt.request_version !== CHECKOUT_REQUEST_VERSION) {
+    const { error } = await admin.from("stripe_checkout_attempts").update({ checkout_status: "failed" })
+      .eq("checkout_attempt_id", checkoutAttempt.checkout_attempt_id);
+    if (error) {
+      logPaymentError("stripe_checkout_attempts.supersede", error);
+      return { error: STRIPE_CHECKOUT_ERROR };
+    }
+    checkoutAttempt = null;
+  }
+
+  if (!checkoutAttempt) {
+    const checkoutAttemptId = crypto.randomUUID();
+    const insertResult = await admin.from("stripe_checkout_attempts").insert({
+      checkout_attempt_id: checkoutAttemptId,
+      owner_id: user.id,
+      listing_id: listing.id,
+      checkout_status: "creating",
+      request_version: CHECKOUT_REQUEST_VERSION,
+    }).select("checkout_attempt_id,stripe_checkout_session_id,checkout_status,request_version").single();
+    if (insertResult.error?.code === "23505") {
+      const concurrentResult = await admin.from("stripe_checkout_attempts")
+        .select("checkout_attempt_id,stripe_checkout_session_id,checkout_status,request_version")
+        .eq("owner_id", user.id).eq("listing_id", listing.id)
+        .in("checkout_status", ["creating", "open"])
+        .order("checkout_started_at", { ascending: false }).limit(1).maybeSingle();
+      if (concurrentResult.error || !concurrentResult.data) {
+        logPaymentError("stripe_checkout_attempts.select-concurrent", concurrentResult.error);
+        return { error: STRIPE_CHECKOUT_ERROR };
+      }
+      checkoutAttempt = concurrentResult.data;
+    } else if (insertResult.error || !insertResult.data) {
+      logPaymentError("stripe_checkout_attempts.insert", insertResult.error);
+      return { error: STRIPE_CHECKOUT_ERROR };
+    } else {
+      checkoutAttempt = insertResult.data;
+    }
+  }
+
   let session: Awaited<ReturnType<typeof stripe.checkout.sessions.create>>;
   try {
     session = await withStripeTiming("stripe.checkout.sessions.create", () => stripe.checkout.sessions.create(
@@ -170,26 +281,50 @@ export async function continueSubmissionAction(
         metadata: { listing_id: listing.id, owner_id: user.id },
         subscription_data: { metadata: { listing_id: listing.id, owner_id: user.id } },
       },
-      { idempotencyKey: `finding-sites:checkout:${listing.id}` },
+      { idempotencyKey: `finding-sites:checkout:${listing.id}:${checkoutAttempt.checkout_attempt_id}` },
     ));
   } catch (error) {
     logPaymentError("stripe.checkout.sessions.create", error);
-    return { error: STRIPE_CHECKOUT_ERROR };
+    const retrySameAttempt = shouldRetrySameCheckoutAttempt(error);
+    if (!retrySameAttempt) {
+      const { error: attemptError } = await admin.from("stripe_checkout_attempts")
+        .update({ checkout_status: "failed" })
+        .eq("checkout_attempt_id", checkoutAttempt.checkout_attempt_id);
+      if (attemptError) logPaymentError("stripe_checkout_attempts.fail", attemptError);
+    }
+    logCheckoutAttempt(listing.id, checkoutAttempt.checkout_attempt_id, false, false);
+    return { error: STRIPE_CHECKOUT_ERROR, startNewCheckoutAttempt: !retrySameAttempt };
   }
-  if (!session.url) redirect(`${reviewPath}?error=checkout`);
+  if (!session.url) {
+    await admin.from("stripe_checkout_attempts").update({ checkout_status: "failed" })
+      .eq("checkout_attempt_id", checkoutAttempt.checkout_attempt_id);
+    logCheckoutAttempt(listing.id, checkoutAttempt.checkout_attempt_id, false, false);
+    return { error: STRIPE_CHECKOUT_ERROR, startNewCheckoutAttempt: true };
+  }
 
-  const { error: sessionError } = await admin.from("stripe_checkout_sessions").insert({ id: session.id, owner_id: user.id, listing_id: listing.id });
+  const { error: sessionError } = await admin.from("stripe_checkout_sessions")
+    .upsert({ id: session.id, owner_id: user.id, listing_id: listing.id }, { onConflict: "id" });
   if (sessionError) {
     logPaymentError("stripe_checkout_sessions.insert", sessionError);
-    await stripe.checkout.sessions.expire(session.id).catch((error) => logPaymentError("stripe.checkout.sessions.expire", error));
-    redirect(`${reviewPath}?error=checkout`);
+    logCheckoutAttempt(listing.id, checkoutAttempt.checkout_attempt_id, false, false);
+    return { error: STRIPE_CHECKOUT_ERROR, startNewCheckoutAttempt: false };
+  }
+  const { error: attemptError } = await admin.from("stripe_checkout_attempts").update({
+    stripe_checkout_session_id: session.id,
+    checkout_status: "open",
+  }).eq("checkout_attempt_id", checkoutAttempt.checkout_attempt_id);
+  if (attemptError) {
+    logPaymentError("stripe_checkout_attempts.attach-session", attemptError);
+    logCheckoutAttempt(listing.id, checkoutAttempt.checkout_attempt_id, false, false);
+    return { error: STRIPE_CHECKOUT_ERROR, startNewCheckoutAttempt: false };
   }
   const { error: listingError } = await admin.from("website_listings").update({ status: "checkout_pending" })
     .eq("id", listing.id).eq("owner_id", user.id).in("status", [...resumableStatuses]);
   if (listingError) {
     logPaymentError("website_listings.checkout-pending", listingError);
-    await stripe.checkout.sessions.expire(session.id).catch((error) => logPaymentError("stripe.checkout.sessions.expire", error));
-    redirect(`${reviewPath}?error=checkout`);
+    logCheckoutAttempt(listing.id, checkoutAttempt.checkout_attempt_id, false, false);
+    return { error: STRIPE_CHECKOUT_ERROR, startNewCheckoutAttempt: false };
   }
+  logCheckoutAttempt(listing.id, checkoutAttempt.checkout_attempt_id, false, true);
   redirect(session.url);
 }

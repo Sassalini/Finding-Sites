@@ -117,6 +117,7 @@ async function processCheckoutCompleted(session: Stripe.Checkout.Session) {
   const synced = await syncSubscription(subscription, checkout.owner_id);
   const completedAt = new Date().toISOString();
   await admin.from("stripe_checkout_sessions").update({ status: "complete", completed_at: completedAt }).eq("id", session.id);
+  await admin.from("stripe_checkout_attempts").update({ checkout_status: "complete" }).eq("stripe_checkout_session_id", session.id);
   if (synced && qualifiesForNewSubmissions(synced.status, trialsEnabled())) {
     const { error: listingError } = await admin.from("website_listings").update({
       status: "pending_review", rejection_reason: null, submitted_at: completedAt,
@@ -164,6 +165,7 @@ export async function POST(request: Request) {
         const session = event.data.object;
         const { data: checkout } = await admin.from("stripe_checkout_sessions").select("listing_id").eq("id", session.id).maybeSingle();
         await admin.from("stripe_checkout_sessions").update({ status: "expired" }).eq("id", session.id);
+        await admin.from("stripe_checkout_attempts").update({ checkout_status: "expired" }).eq("stripe_checkout_session_id", session.id);
         if (checkout) await admin.from("website_listings").update({ status: "draft" }).eq("id", checkout.listing_id).eq("status", "checkout_pending");
         break;
       }

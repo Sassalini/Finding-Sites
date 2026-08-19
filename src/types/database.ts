@@ -60,6 +60,12 @@ export interface Database {
         Update: { status?: "open" | "complete" | "expired"; completed_at?: string | null };
         Relationships: [];
       };
+      stripe_checkout_attempts: {
+        Row: { checkout_attempt_id: string; owner_id: string; listing_id: string; stripe_checkout_session_id: string | null; checkout_status: "creating" | "open" | "failed" | "abandoned" | "complete" | "expired"; request_version: string; checkout_started_at: string; updated_at: string };
+        Insert: { checkout_attempt_id?: string; owner_id: string; listing_id: string; stripe_checkout_session_id?: string | null; checkout_status?: "creating" | "open" | "failed" | "abandoned" | "complete" | "expired"; request_version: string; checkout_started_at?: string; updated_at?: string };
+        Update: { stripe_checkout_session_id?: string | null; checkout_status?: "creating" | "open" | "failed" | "abandoned" | "complete" | "expired"; request_version?: string; updated_at?: string };
+        Relationships: [];
+      };
       stripe_webhook_events: {
         Row: { id: string; event_type: string; received_at: string; processed_at: string | null; processing_error: string | null; created_at: string };
         Insert: { id: string; event_type: string; received_at?: string; processed_at?: string | null; processing_error?: string | null; created_at?: string };

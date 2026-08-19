@@ -90,6 +90,7 @@ export default async function ReviewSubmissionPage({
           listingName={listing.name}
           active={active}
           checkoutPending={listing.status === "checkout_pending"}
+          startNewCheckoutAttempt={query.checkout === "cancelled"}
         />
       </section>
     </main>

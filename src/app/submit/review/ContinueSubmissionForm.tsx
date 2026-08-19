@@ -12,13 +12,16 @@ export function ContinueSubmissionForm({
   listingName,
   active,
   checkoutPending,
+  startNewCheckoutAttempt,
 }: {
   listingId: string;
   listingName: string;
   active: boolean;
   checkoutPending: boolean;
+  startNewCheckoutAttempt: boolean;
 }) {
   const [state, formAction, pending] = useActionState(continueSubmissionAction, initialState);
+  const shouldStartNewAttempt = state.startNewCheckoutAttempt ?? startNewCheckoutAttempt;
   const idleLabel = active ? "Submit for Review" : checkoutPending ? "Resume Payment" : "Continue to Payment";
   const pendingLabel = active ? "Submitting…" : "Connecting to Stripe…";
 
@@ -29,6 +32,7 @@ export function ContinueSubmissionForm({
         <Link href={`/account/sites/${listingId}/edit`} className="button button-secondary">Edit Draft</Link>
         <form action={formAction} className="review-checkout-form">
           <input type="hidden" name="listingId" value={listingId} />
+          <input type="hidden" name="startNewCheckoutAttempt" value={String(shouldStartNewAttempt)} />
           <button className="button button-accent" type="submit" disabled={pending} aria-busy={pending}>
             {pending ? pendingLabel : idleLabel}
           </button>

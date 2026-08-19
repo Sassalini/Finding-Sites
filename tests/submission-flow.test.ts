@@ -9,6 +9,7 @@ const reviewForm = readFileSync("src/app/submit/review/ContinueSubmissionForm.ts
 const accountPage = readFileSync("src/app/account/page.tsx", "utf8");
 const stripeConfig = readFileSync("src/lib/stripe/config.ts", "utf8");
 const stripeServer = readFileSync("src/lib/stripe/server.ts", "utf8");
+const checkoutAttemptsMigration = readFileSync("supabase/migrations/20260819210000_checkout_attempts.sql", "utf8");
 
 test("the initial submission saves one draft before opening the review flow", () => {
   assert.match(saveAction, /const newId = crypto\.randomUUID\(\)/);
@@ -27,7 +28,7 @@ test("account cards expose resumable actions for saved listings", () => {
 test("checkout resumes the same owned listing and never creates another listing", () => {
   assert.match(reviewAction, /listing\.owner_id !== user\.id/);
   assert.match(reviewAction, /listing_id: listing\.id, owner_id: user\.id/);
-  assert.match(reviewAction, /stripe_checkout_sessions"\)\.insert\(\{ id: session\.id, owner_id: user\.id, listing_id: listing\.id \}\)/);
+  assert.match(reviewAction, /stripe_checkout_sessions"\)[\s\S]*\.upsert\(\{ id: session\.id, owner_id: user\.id, listing_id: listing\.id \}/);
   assert.doesNotMatch(reviewAction, /from\("website_listings"\)\.insert/);
 });
 
@@ -71,4 +72,24 @@ test("checkout failures return an inline error and reset the pending button", ()
 
 test("subscription Checkout explicitly disables Managed Payments", () => {
   assert.match(reviewAction, /mode: "subscription",\s+managed_payments: \{ enabled: false \}/);
+});
+
+test("checkout idempotency is scoped to a persisted logical attempt", () => {
+  assert.match(reviewAction, /crypto\.randomUUID\(\)/);
+  assert.match(reviewAction, /finding-sites:checkout:\$\{listing\.id\}:\$\{checkoutAttempt\.checkout_attempt_id\}/);
+  assert.doesNotMatch(reviewAction, /idempotencyKey: `finding-sites:checkout:\$\{listing\.id\}`/);
+  assert.match(checkoutAttemptsMigration, /create table public\.stripe_checkout_attempts/);
+  assert.match(checkoutAttemptsMigration, /stripe_checkout_session_id text unique/);
+  assert.match(checkoutAttemptsMigration, /request_version text not null/);
+});
+
+test("an indeterminate Stripe failure keeps the attempt while a deliberate restart supersedes it", () => {
+  assert.match(reviewAction, /type === "StripeConnectionError" \|\| type === "StripeAPIError"/);
+  assert.match(reviewAction, /checkout_status: "abandoned"/);
+  assert.match(reviewForm, /name="startNewCheckoutAttempt"/);
+  assert.match(reviewPage, /startNewCheckoutAttempt=\{query\.checkout === "cancelled"\}/);
+});
+
+test("checkout attempt logs contain identifiers and reuse outcomes only", () => {
+  assert.match(reviewAction, /console\.info\("\[stripe-checkout-attempt\]", \{\s+listingId,\s+checkoutAttemptId,\s+existingStripeSessionReused,\s+newStripeSessionCreated/);
 });
