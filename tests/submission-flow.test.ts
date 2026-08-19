@@ -5,8 +5,10 @@ import test from "node:test";
 const saveAction = readFileSync("src/app/submit/actions.ts", "utf8");
 const reviewAction = readFileSync("src/app/submit/review/actions.ts", "utf8");
 const reviewPage = readFileSync("src/app/submit/review/[id]/page.tsx", "utf8");
+const reviewForm = readFileSync("src/app/submit/review/ContinueSubmissionForm.tsx", "utf8");
 const accountPage = readFileSync("src/app/account/page.tsx", "utf8");
 const stripeConfig = readFileSync("src/lib/stripe/config.ts", "utf8");
+const stripeServer = readFileSync("src/lib/stripe/server.ts", "utf8");
 
 test("the initial submission saves one draft before opening the review flow", () => {
   assert.match(saveAction, /const newId = crypto\.randomUUID\(\)/);
@@ -52,4 +54,17 @@ test("checkout reads and validates Worker-populated Stripe configuration at requ
   assert.match(stripeConfig, /value\.startsWith\("price_"\)/);
   assert.match(stripeConfig, /value\.startsWith\("https:\/\/"\)/);
   assert.doesNotMatch(reviewAction, /STRIPE_WEBHOOK_SECRET/);
+});
+
+test("Stripe uses fetch transport with an interactive timeout and no automatic retries", () => {
+  assert.match(stripeServer, /httpClient: Stripe\.createFetchHttpClient\(\)/);
+  assert.match(stripeServer, /timeout: STRIPE_REQUEST_TIMEOUT_MS/);
+  assert.match(stripeServer, /maxNetworkRetries: 0/);
+});
+
+test("checkout failures return an inline error and reset the pending button", () => {
+  assert.match(reviewAction, /We couldn’t connect to Stripe\. Please try again\./);
+  assert.match(reviewForm, /useActionState\(continueSubmissionAction, initialState\)/);
+  assert.match(reviewForm, /disabled=\{pending\}/);
+  assert.match(reviewForm, /state\.error/);
 });

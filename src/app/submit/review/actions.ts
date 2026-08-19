@@ -4,11 +4,14 @@ import { redirect } from "next/navigation";
 import { getListingEntitlement } from "@/lib/billing/subscription";
 import { safeServerError } from "@/lib/server-errors";
 import { getCheckoutConfiguration, getStripeRuntimeConfiguration, logStripeConfigurationDiagnostics } from "@/lib/stripe/config";
-import { getStripeClient } from "@/lib/stripe/server";
+import { getStripeClient, withStripeTiming } from "@/lib/stripe/server";
 import { getSupabaseAdminClient, logSupabaseAdminConfigurationDiagnostics } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 const resumableStatuses = ["draft", "changes_requested", "checkout_pending"] as const;
+const STRIPE_CONNECTION_ERROR = "We couldn’t connect to Stripe. Please try again.";
+
+export type ContinueSubmissionState = { error?: string };
 
 function safeOrigin(value: string | null) {
   if (!value) return null;
@@ -24,7 +27,10 @@ function logPaymentError(operation: string, error: unknown) {
   console.error("[continue-submission]", { operation, ...safeServerError(error) });
 }
 
-export async function continueSubmissionAction(formData: FormData) {
+export async function continueSubmissionAction(
+  _state: ContinueSubmissionState,
+  formData: FormData,
+): Promise<ContinueSubmissionState> {
   const listingId = String(formData.get("listingId") ?? "");
   const reviewPath = `/submit/review/${listingId}`;
   const supabase = await getSupabaseServerClient();
@@ -111,7 +117,7 @@ export async function continueSubmissionAction(formData: FormData) {
       logPaymentError("stripe.checkout.sessions.retrieve", error);
       retrievalFailed = true;
     }
-    if (retrievalFailed) redirect(`${reviewPath}?error=checkout`);
+    if (retrievalFailed) return { error: STRIPE_CONNECTION_ERROR };
     if (existingUrl) redirect(existingUrl);
   }
 
@@ -123,11 +129,14 @@ export async function continueSubmissionAction(formData: FormData) {
   let stripeCustomerId = profileResult.data?.stripe_customer_id ?? entitlement.stripeCustomerId;
   if (!stripeCustomerId) {
     try {
-      const customer = await stripe.customers.create({ email: user.email, metadata: { owner_id: user.id } });
+      const customer = await withStripeTiming("stripe.customers.create", () => stripe.customers.create(
+        { email: user.email, metadata: { owner_id: user.id } },
+        { idempotencyKey: `finding-sites:customer:${user.id}` },
+      ));
       stripeCustomerId = customer.id;
     } catch (error) {
       logPaymentError("stripe.customers.create", error);
-      redirect(`${reviewPath}?error=checkout`);
+      return { error: STRIPE_CONNECTION_ERROR };
     }
     const { error } = await admin.from("profiles").update({ stripe_customer_id: stripeCustomerId }).eq("id", user.id);
     if (error) {
@@ -142,26 +151,29 @@ export async function continueSubmissionAction(formData: FormData) {
     hasConflictingSubscription = subscriptions.data.some((subscription) => ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"].includes(subscription.status));
   } catch (error) {
     logPaymentError("stripe.subscriptions.list", error);
-    redirect(`${reviewPath}?error=checkout`);
+    return { error: STRIPE_CONNECTION_ERROR };
   }
   if (hasConflictingSubscription) redirect("/account?billing=attention");
 
   let session: Awaited<ReturnType<typeof stripe.checkout.sessions.create>>;
   try {
-    session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      line_items: [{ price: checkoutConfig.directoryPriceId, quantity: 1 }],
-      success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}${reviewPath}?checkout=cancelled`,
-      client_reference_id: listing.id,
-      customer: stripeCustomerId,
-      allow_promotion_codes: true,
-      metadata: { listing_id: listing.id, owner_id: user.id },
-      subscription_data: { metadata: { listing_id: listing.id, owner_id: user.id } },
-    });
+    session = await withStripeTiming("stripe.checkout.sessions.create", () => stripe.checkout.sessions.create(
+      {
+        mode: "subscription",
+        line_items: [{ price: checkoutConfig.directoryPriceId, quantity: 1 }],
+        success_url: `${origin}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}${reviewPath}?checkout=cancelled`,
+        client_reference_id: listing.id,
+        customer: stripeCustomerId,
+        allow_promotion_codes: true,
+        metadata: { listing_id: listing.id, owner_id: user.id },
+        subscription_data: { metadata: { listing_id: listing.id, owner_id: user.id } },
+      },
+      { idempotencyKey: `finding-sites:checkout:${listing.id}` },
+    ));
   } catch (error) {
     logPaymentError("stripe.checkout.sessions.create", error);
-    redirect(`${reviewPath}?error=checkout`);
+    return { error: STRIPE_CONNECTION_ERROR };
   }
   if (!session.url) redirect(`${reviewPath}?error=checkout`);
 

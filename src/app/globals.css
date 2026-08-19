@@ -275,6 +275,7 @@ svg { display: block; }
 .submission-note p { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
 .submission-form .form-actions { justify-content: flex-end; }
 .submission-form button:disabled { opacity: .6; cursor: wait; transform: none; }
+.review-checkout-form button:disabled { opacity: .6; cursor: wait; transform: none; }
 .review-card { display: grid; gap: 28px; }
 .review-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 28px; }
 .review-summary > div { display: grid; gap: 5px; }

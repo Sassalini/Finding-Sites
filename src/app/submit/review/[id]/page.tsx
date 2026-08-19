@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { DeleteDialog } from "@/app/account/DeleteDialog";
-import { continueSubmissionAction } from "@/app/submit/review/actions";
+import { ContinueSubmissionForm } from "@/app/submit/review/ContinueSubmissionForm";
 import { getListingEntitlement } from "@/lib/billing/subscription";
 import { safeServerError } from "@/lib/server-errors";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
@@ -86,12 +85,12 @@ export default async function ReviewSubmissionPage({
             <p>{active ? "Stripe Checkout will be bypassed and this listing will go straight to Pending Review." : "Continue to secure Stripe Checkout. One subscription covers up to two listings on this account."}</p>
           </div>
         </div>
-        <form action={continueSubmissionAction} className="form-actions">
-          <input type="hidden" name="listingId" value={listing.id} />
-          <Link href={`/account/sites/${listing.id}/edit`} className="button button-secondary">Edit Draft</Link>
-          <button className="button button-accent" type="submit">{active ? "Submit for Review" : listing.status === "checkout_pending" ? "Resume Payment" : "Continue to Payment"}</button>
-          <DeleteDialog listingId={listing.id} listingName={listing.name} />
-        </form>
+        <ContinueSubmissionForm
+          listingId={listing.id}
+          listingName={listing.name}
+          active={active}
+          checkoutPending={listing.status === "checkout_pending"}
+        />
       </section>
     </main>
   );
