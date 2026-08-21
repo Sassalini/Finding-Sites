@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getListingEntitlement } from "@/lib/billing/subscription";
+import { finalizeListingAfterEntitlement } from "@/lib/listings/finalize";
 import { safeServerError } from "@/lib/server-errors";
 import { getCheckoutConfiguration, getStripeRuntimeConfiguration, logStripeConfigurationDiagnostics } from "@/lib/stripe/config";
 import { getStripeClient, withStripeTiming } from "@/lib/stripe/server";
@@ -87,11 +88,10 @@ export async function continueSubmissionAction(
   if (!admin) redirect(`${reviewPath}?error=configuration`);
 
   if (entitlement.hasQualifyingSubscription) {
-    const { error } = await admin.from("website_listings").update({
-      status: "pending_review", rejection_reason: null, submitted_at: new Date().toISOString(),
-    }).eq("id", listing.id).eq("owner_id", user.id).in("status", [...resumableStatuses]);
-    if (error) {
-      logPaymentError("website_listings.submit", error);
+    try {
+      await finalizeListingAfterEntitlement(listing.id, user.id);
+    } catch (error) {
+      logPaymentError("finalize-listing-after-entitlement", error);
       redirect(`${reviewPath}?error=submit`);
     }
     redirect(`/submit/confirmation?id=${listing.id}&kind=submit`);

@@ -65,7 +65,7 @@ export default async function ReviewSubmissionPage({
       <header className="account-heading">
         <span className="eyebrow">Submission summary</span>
         <h1>Review your listing</h1>
-        <p>Check the details below. Nothing appears in Finding Sites until an administrator approves it.</p>
+        <p>Check the details below. Existing active categories publish after entitlement checks; requested categories are sent for administrator review.</p>
       </header>
       {query.checkout === "cancelled" && <p className="form-alert" role="status">Payment was not completed. Your website draft has been saved.</p>}
       {error && <p className="form-alert form-alert-error" role="alert">{error}</p>}

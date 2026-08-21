@@ -13,12 +13,12 @@ import type { ListingRevisionStatus, ListingStatus } from "@/types/database";
 export const metadata: Metadata = { title: "Your Account", robots: { index: false, follow: false } };
 
 const statusLabels: Record<ListingStatus | ListingRevisionStatus, string> = {
-  draft: "Draft", checkout_pending: "Checkout pending", pending_review: "Pending review", approved: "Approved", rejected: "Changes requested", changes_requested: "Changes requested", suspended: "Suspended", subscription_inactive: "Subscription inactive", deleted: "Deleted", permanently_rejected: "Permanently rejected", expired: "Expired",
+  draft: "Draft", checkout_pending: "Checkout pending", pending_review: "Awaiting category review", approved: "Live", rejected: "Not approved", changes_requested: "Changes requested", suspended: "Suspended", subscription_inactive: "Subscription inactive", deleted: "Deleted", permanently_rejected: "Not approved", expired: "Expired",
 };
 const statusExplanations: Partial<Record<ListingStatus, string>> = {
   draft: "Saved privately. Review and submit it when ready.",
   checkout_pending: "Waiting for Stripe to confirm subscription payment.",
-  pending_review: "The directory team is reviewing this site.",
+  pending_review: "The directory team is reviewing the requested category.",
   approved: "Published in Finding Sites.",
   changes_requested: "Update the listing using the review feedback, then resubmit.",
   suspended: "Hidden by an administrator. Contact support for details.",
@@ -52,7 +52,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   let accountData;
   try {
     accountData = await Promise.all([
-      supabase.from("profiles").select("display_name,deletion_requested_at,stripe_customer_id").eq("id", user.id).maybeSingle(),
+      supabase.from("profiles").select("display_name,deletion_requested_at,stripe_customer_id,role").eq("id", user.id).maybeSingle(),
       supabase.from("website_listings").select("id,name,url,normalized_domain,category_id,status,rejection_reason,submitted_at,approved_at,updated_at").eq("owner_id", user.id).neq("status", "deleted").order("updated_at", { ascending: false }),
       supabase.from("listing_revisions").select("id,listing_id,name,status,rejection_reason,created_at").eq("owner_id", user.id).order("created_at", { ascending: false }),
       getListingEntitlement(supabase, user.id, { logPrefix: "[account]" }),
@@ -84,7 +84,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
 
   return (
     <main className="account-shell" id="main-content">
-      <nav className="account-nav" aria-label="Account"><a href="#overview">Overview</a><a href="#sites">My Sites</a><Link href="/account/sites/new">Add Site</Link><a href="#billing">Billing</a><a href="#settings">Account Settings</a></nav>
+      <nav className="account-nav" aria-label="Account"><a href="#overview">Overview</a><a href="#sites">My Sites</a><Link href="/account/sites/new">Add Site</Link><a href="#billing">Billing</a><a href="#settings">Account Settings</a>{profile?.role === "admin" && <Link href="/admin">Admin</Link>}</nav>
       <header className="account-heading account-heading-row" id="overview"><div><span className="eyebrow">Your account</span><h1>Welcome, {displayName}</h1><p>{user.email}</p></div><div className="account-actions">{entitlement.canCreateListing ? <Link className="button button-accent" href="/account/sites/new">Add Site</Link> : <span className="slot-limit-note">2-site limit reached</span>}<form action={logoutAction}><button className="button button-secondary">Sign out</button></form></div></header>
       {error && <p className="form-alert form-alert-error">{error}</p>}
       {query.billing === "attention" && <p className="form-alert form-alert-error">This subscription needs attention before another listing can be submitted. Open Manage Billing to continue.</p>}
@@ -115,9 +115,9 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                 <div className="submission-item-action">
                   {listing.status === "draft" && <><Link href={editHref} className="button button-secondary">Edit</Link><Link href={reviewHref} className="button button-accent">{entitlement.hasQualifyingSubscription ? "Submit for Review" : "Continue to Payment"}</Link></>}
                   {listing.status === "checkout_pending" && <><Link href={reviewHref} className="button button-accent">{entitlement.hasQualifyingSubscription ? "Submit for Review" : "Resume Payment"}</Link><Link href={editHref} className="button button-secondary">Edit</Link></>}
-                  {listing.status === "pending_review" && <><Link href={previewHref} className="button button-secondary">View submission</Link><Link href={editHref} className="button button-secondary">Edit</Link></>}
-                  {listing.status === "approved" && <><a href={listing.url} target="_blank" rel="noreferrer" className="button button-secondary">View live listing</a><Link href={editHref} className="button button-secondary">Propose edits</Link></>}
-                  {listing.status === "changes_requested" && <><Link href={reviewHref} className="button button-accent">Review Required Changes</Link><Link href={editHref} className="button button-secondary">Edit and resubmit</Link></>}
+                  {listing.status === "pending_review" && <><Link href={previewHref} className="button button-secondary">View Submission</Link><Link href={editHref} className="button button-secondary">Edit</Link></>}
+                  {listing.status === "approved" && <><a href={listing.url} target="_blank" rel="noreferrer" className="button button-secondary">View Listing</a><Link href={editHref} className="button button-secondary">Edit</Link></>}
+                  {listing.status === "changes_requested" && <><Link href={previewHref} className="button button-accent">View Feedback</Link><Link href={editHref} className="button button-secondary">Edit &amp; Resubmit</Link></>}
                   {listing.status === "subscription_inactive" && <><Link href={previewHref} className="button button-secondary">View listing</Link><Link href={editHref} className="button button-secondary">Edit</Link>{(entitlement.stripeCustomerId || profile?.stripe_customer_id) && <form action={createBillingPortalAction}><button className="button button-accent">Reactivate subscription</button></form>}</>}
                   {["suspended", "rejected", "permanently_rejected", "expired"].includes(listing.status) && <Link href={previewHref} className="button button-secondary">View submission</Link>}
                   <DeleteDialog listingId={listing.id} listingName={listing.name} />

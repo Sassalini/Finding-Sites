@@ -25,7 +25,7 @@ export async function SiteHeader() {
         <nav className="desktop-navigation" aria-label="Primary navigation">
           {navigation.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
           <Link href="/account/sites/new" className="button button-accent button-small">Submit a website</Link>
-          {profile?.role === "admin" && <Link href="/admin">Review queue</Link>}
+          {profile?.role === "admin" && <Link href="/admin">Admin</Link>}
           {data.user ? <Link href="/account">Account</Link> : <Link href="/login">Log in</Link>}
         </nav>
         <details className="mobile-menu">
@@ -34,7 +34,7 @@ export async function SiteHeader() {
             <GlobalSearch compact />
             <nav aria-label="Mobile navigation">
               {navigation.map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
-              {profile?.role === "admin" && <Link href="/admin">Review queue</Link>}
+              {profile?.role === "admin" && <Link href="/admin">Admin</Link>}
               {data.user ? <Link href="/account">Account</Link> : <Link href="/login">Log in</Link>}
               <Link href="/account/sites/new" className="button button-accent">Submit a website</Link>
               {data.user && <form action={logoutAction}><button className="mobile-logout" type="submit">Log out</button></form>}

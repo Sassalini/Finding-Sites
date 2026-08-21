@@ -14,17 +14,20 @@ export default async function SubmissionConfirmationPage({ searchParams }: { sea
   if (!user) redirect("/login?next=/account");
 
   const result = kind === "revision"
-    ? await supabase.from("listing_revisions").select("name,owner_id").eq("id", id).maybeSingle()
-    : await supabase.from("website_listings").select("name,owner_id").eq("id", id).maybeSingle();
+    ? await supabase.from("listing_revisions").select("name,owner_id,status").eq("id", id).maybeSingle()
+    : await supabase.from("website_listings").select("name,owner_id,status").eq("id", id).maybeSingle();
   if (!result.data || result.data.owner_id !== user.id) notFound();
 
   const isDraft = kind === "draft";
-  const title = kind === "revision" ? "Revision submitted" : isDraft ? "Draft saved" : "Website submitted";
+  const isLive = kind !== "revision" && result.data.status === "approved";
+  const title = kind === "revision" ? "Revision submitted" : isDraft ? "Draft saved" : isLive ? "Website published" : "Website submitted";
   const detail = kind === "revision"
     ? "Your proposed changes are waiting for review. The approved listing remains live and unchanged in the meantime."
     : isDraft
       ? "Your website has not been sent for review yet. You can continue editing it from your account."
-      : "Your website is now waiting for human review. You can follow its status from your account.";
+      : isLive
+        ? "Your website is now live in its selected Finding Sites category."
+        : "Your requested category is waiting for administrator review. You can follow its status from your account.";
 
   return (
     <main className="account-shell account-shell-narrow" id="main-content">

@@ -22,7 +22,7 @@ test("account cards expose resumable actions for saved listings", () => {
   assert.match(accountPage, /Continue to Payment/);
   assert.match(accountPage, /Submit for Review/);
   assert.match(accountPage, /Resume Payment/);
-  assert.match(accountPage, /Review Required Changes/);
+  assert.match(accountPage, /View Feedback/);
 });
 
 test("checkout resumes the same owned listing and never creates another listing", () => {
@@ -41,7 +41,7 @@ test("an active subscriber bypasses Checkout and submits the existing listing", 
   const entitlementBranch = reviewAction.indexOf("if (entitlement.hasQualifyingSubscription)");
   const checkoutCreation = reviewAction.indexOf("stripe.checkout.sessions.create");
   assert.ok(entitlementBranch > -1 && checkoutCreation > entitlementBranch);
-  assert.match(reviewAction.slice(entitlementBranch, checkoutCreation), /status: "pending_review"/);
+  assert.match(reviewAction.slice(entitlementBranch, checkoutCreation), /finalizeListingAfterEntitlement\(listing\.id, user\.id\)/);
 });
 
 test("checkout enforces the listing limit and checks for conflicting subscriptions", () => {

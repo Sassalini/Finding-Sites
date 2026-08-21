@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { qualifiesForNewSubmissions } from "@/lib/billing/policy";
 import { trialsEnabled } from "@/lib/billing/subscription";
+import { finalizeListingAfterEntitlement } from "@/lib/listings/finalize";
 import { getStripeRuntimeConfiguration, logStripeConfigurationDiagnostics } from "@/lib/stripe/config";
 import { getStripeClient } from "@/lib/stripe/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -90,17 +91,6 @@ async function syncSubscription(subscription: Stripe.Subscription, fallbackOwner
   if (error) throw error;
   await admin.from("profiles").update({ stripe_customer_id: customerId }).eq("id", ownerId);
   await applyListingLifecycle(ownerId, status, currentPeriodEnd, gracePeriodEnd ?? null);
-  if (qualifiesForNewSubmissions(status, trialsEnabled())) {
-    const { data: sessions } = await admin.from("stripe_checkout_sessions").select("listing_id")
-      .eq("owner_id", ownerId).eq("status", "complete");
-    const listingIds = [...new Set((sessions ?? []).map((session) => session.listing_id))];
-    if (listingIds.length) {
-      const { error: listingError } = await admin.from("website_listings").update({
-        status: "pending_review", rejection_reason: null, submitted_at: new Date().toISOString(),
-      }).in("id", listingIds).eq("status", "checkout_pending");
-      if (listingError) throw listingError;
-    }
-  }
   return { ownerId, status };
 }
 
@@ -119,10 +109,7 @@ async function processCheckoutCompleted(session: Stripe.Checkout.Session) {
   await admin.from("stripe_checkout_sessions").update({ status: "complete", completed_at: completedAt }).eq("id", session.id);
   await admin.from("stripe_checkout_attempts").update({ checkout_status: "complete" }).eq("stripe_checkout_session_id", session.id);
   if (synced && qualifiesForNewSubmissions(synced.status, trialsEnabled())) {
-    const { error: listingError } = await admin.from("website_listings").update({
-      status: "pending_review", rejection_reason: null, submitted_at: completedAt,
-    }).eq("id", checkout.listing_id).eq("owner_id", checkout.owner_id).eq("status", "checkout_pending");
-    if (listingError) throw listingError;
+    await finalizeListingAfterEntitlement(checkout.listing_id, checkout.owner_id);
   }
 }
 

@@ -18,7 +18,8 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
   const { data: listing } = checkout
     ? await supabase.from("website_listings").select("name,status").eq("id", checkout.listing_id).maybeSingle()
     : { data: null };
-  const confirmed = checkout?.status === "complete" && listing?.status === "pending_review";
+  const confirmed = checkout?.status === "complete" && ["approved", "pending_review"].includes(listing?.status ?? "");
+  const isLive = listing?.status === "approved";
 
   return (
     <main className="account-shell account-shell-narrow" id="main-content">
@@ -27,7 +28,7 @@ export default async function CheckoutSuccessPage({ searchParams }: { searchPara
         <span className="eyebrow">Stripe Checkout</span>
         <h1>{confirmed ? "Payment confirmed" : "Confirming your payment"}</h1>
         {listing?.name && <p><strong>{listing.name}</strong></p>}
-        <p>{confirmed ? "Your listing is now Pending Review. An administrator will approve it before it appears in Finding Sites." : "Stripe is finalising the subscription. Your listing will move to Pending Review as soon as the verified webhook arrives."}</p>
+        <p>{confirmed ? isLive ? "Your listing is live in Finding Sites." : "Your listing is awaiting review of its requested category." : "Stripe is finalising the subscription. Your listing will be published or sent for category review after the verified webhook confirms entitlement."}</p>
         <div className="form-actions"><Link href="/account" className="button button-accent">View your account</Link><Link href="/" className="button button-secondary">Browse Finding Sites</Link></div>
       </section>
     </main>
