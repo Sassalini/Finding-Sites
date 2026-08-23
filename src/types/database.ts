@@ -81,6 +81,9 @@ export interface Database {
       request_account_deletion: { Args: Record<string, never>; Returns: undefined };
       finalize_listing_after_entitlement: { Args: { candidate_listing_id: string; candidate_owner_id: string }; Returns: string };
       admin_moderate_category_listing: { Args: { candidate_listing_id: string; moderation_action: string; selected_category_id?: string | null; moderation_reason?: string | null }; Returns: string };
+      is_listing_publicly_eligible: { Args: { candidate_status: ListingStatus; candidate_deleted_at: string | null; candidate_published_at: string | null; candidate_owner_id: string | null; candidate_category_id: string | null }; Returns: boolean };
+      record_directory_search_event: { Args: { candidate_query: string; candidate_category_id: string | null; candidate_result_count: number; candidate_anonymous_session_id: string; candidate_user_id?: string | null }; Returns: boolean };
+      get_directory_stats: { Args: { candidate_min_popular_frequency?: number; candidate_popular_window_days?: number }; Returns: Json };
     };
     Enums: { listing_status: ListingStatus; listing_revision_status: ListingRevisionStatus };
     CompositeTypes: Record<string, never>;

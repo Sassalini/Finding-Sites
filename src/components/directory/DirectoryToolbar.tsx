@@ -2,11 +2,14 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/Icon";
 import { directoryHref } from "@/lib/directory/urls";
 import type { DirectoryFilters } from "@/types/directory";
+import { executeDirectorySearch } from "@/app/search/actions";
 
 export function DirectoryToolbar({ filters, pathname, categoryName }: { filters: DirectoryFilters; pathname: string; categoryName?: string }) {
   return (
     <div className="directory-toolbar">
-      <form action={pathname} method="get" role="search" className="category-search">
+      <form action={executeDirectorySearch} role="search" className="category-search">
+        <input type="hidden" name="pathname" value={pathname} />
+        {filters.categorySlug && <input type="hidden" name="categorySlug" value={filters.categorySlug} />}
         <label className="sr-only" htmlFor="directory-query">{categoryName ? `Search within ${categoryName}` : "Search all websites"}</label>
         <Icon name="search" />
         <input id="directory-query" name="q" defaultValue={filters.query} placeholder={categoryName ? `Search within ${categoryName}…` : "Search all websites…"} />
