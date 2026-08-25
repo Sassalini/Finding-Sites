@@ -25,6 +25,7 @@ const statusExplanations: Partial<Record<ListingStatus, string>> = {
   subscription_inactive: "Hidden because the paid-through or grace period ended.",
 };
 const subscriptionLabels = { active: "Active", trialing: "Trialing", incomplete: "Incomplete", incomplete_expired: "Expired", past_due: "Past due", canceled: "Canceled", unpaid: "Unpaid", paused: "Paused" } as const;
+const removalLabels: Record<string, string> = { nsfw: "NSFW / adult content", malware: "Malware / unsafe website", scam: "Scam / fraud", spam: "Spam", illegal: "Illegal / prohibited content", misleading: "Misleading listing", terms: "Terms violation", other: "Other" };
 const accountErrors: Record<string, string> = {
   "billing-configuration": "Billing management is not configured yet.",
   "no-billing-account": "There is no Stripe billing account to manage yet.",
@@ -53,7 +54,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
   try {
     accountData = await Promise.all([
       supabase.from("profiles").select("display_name,deletion_requested_at,stripe_customer_id,role").eq("id", user.id).maybeSingle(),
-      supabase.from("website_listings").select("id,name,url,normalized_domain,category_id,status,rejection_reason,submitted_at,approved_at,updated_at").eq("owner_id", user.id).neq("status", "deleted").order("updated_at", { ascending: false }),
+      supabase.from("website_listings").select("id,name,url,normalized_domain,category_id,status,moderation_status,removed_at,removal_reason,rejection_reason,submitted_at,approved_at,updated_at").eq("owner_id", user.id).neq("status", "deleted").order("updated_at", { ascending: false }),
       supabase.from("listing_revisions").select("id,listing_id,name,status,rejection_reason,created_at").eq("owner_id", user.id).order("created_at", { ascending: false }),
       getListingEntitlement(supabase, user.id, { logPrefix: "[account]" }),
     ]);
@@ -106,17 +107,19 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             return (
               <article className="submission-item" key={listing.id}>
                 <div className="submission-item-main">
-                  <div className="submission-title-line"><h2>{listing.name}</h2><span className={`status-badge status-${listing.status}`}><span aria-hidden="true">●</span> {statusLabels[listing.status]}</span></div>
+                  <div className="submission-title-line"><h2>{listing.name}</h2><span className={`status-badge ${listing.moderation_status === "removed" ? "status-suspended" : `status-${listing.status}`}`}><span aria-hidden="true">●</span> {listing.moderation_status === "removed" ? "Removed by Finding Sites" : statusLabels[listing.status]}</span></div>
                   <a href={listing.url} target="_blank" rel="noreferrer">{listing.normalized_domain}</a>
                   <p>{categoriesById.get(listing.category_id ?? "") ?? "Requested category"} · Submitted {formatDate(listing.submitted_at)}{listing.approved_at ? ` · Approved ${formatDate(listing.approved_at)}` : ""}</p>
-                  <p className="status-explanation">{statusExplanations[listing.status] ?? "Contact the directory team for information about this status."}</p>
+                  <p className="status-explanation">{listing.moderation_status === "removed" ? "This listing is no longer publicly visible because it was removed by moderation. It continues to occupy one of your two listing slots until you delete it." : statusExplanations[listing.status] ?? "Contact the directory team for information about this status."}</p>
+                  {listing.moderation_status === "removed" && listing.removal_reason && <div className="rejection-note"><strong>Removal reason</strong><p>{removalLabels[listing.removal_reason] ?? "Terms violation"}</p></div>}
                   {listing.rejection_reason && <div className="rejection-note"><strong>Review feedback</strong><p>{listing.rejection_reason}</p></div>}
                 </div>
                 <div className="submission-item-action">
                   {listing.status === "draft" && <><Link href={editHref} className="button button-secondary">Edit</Link><Link href={reviewHref} className="button button-accent">{entitlement.hasQualifyingSubscription ? "Submit for Review" : "Continue to Payment"}</Link></>}
                   {listing.status === "checkout_pending" && <><Link href={reviewHref} className="button button-accent">{entitlement.hasQualifyingSubscription ? "Submit for Review" : "Resume Payment"}</Link><Link href={editHref} className="button button-secondary">Edit</Link></>}
                   {listing.status === "pending_review" && <><Link href={previewHref} className="button button-secondary">View Submission</Link><Link href={editHref} className="button button-secondary">Edit</Link></>}
-                  {listing.status === "approved" && <><a href={listing.url} target="_blank" rel="noreferrer" className="button button-secondary">View Listing</a><Link href={editHref} className="button button-secondary">Edit</Link></>}
+                  {listing.status === "approved" && listing.moderation_status !== "removed" && <><a href={listing.url} target="_blank" rel="noreferrer" className="button button-secondary">View Listing</a><Link href={editHref} className="button button-secondary">Edit</Link></>}
+                  {listing.moderation_status === "removed" && <Link href={previewHref} className="button button-secondary">View submission</Link>}
                   {listing.status === "changes_requested" && <><Link href={previewHref} className="button button-accent">View Feedback</Link><Link href={editHref} className="button button-secondary">Edit &amp; Resubmit</Link></>}
                   {listing.status === "subscription_inactive" && <><Link href={previewHref} className="button button-secondary">View listing</Link><Link href={editHref} className="button button-secondary">Edit</Link>{(entitlement.stripeCustomerId || profile?.stripe_customer_id) && <form action={createBillingPortalAction}><button className="button button-accent">Reactivate subscription</button></form>}</>}
                   {["suspended", "rejected", "permanently_rejected", "expired"].includes(listing.status) && <Link href={previewHref} className="button button-secondary">View submission</Link>}

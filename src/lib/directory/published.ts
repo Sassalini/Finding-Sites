@@ -36,7 +36,7 @@ export async function loadPublishedDirectory(
   filters: DirectoryFilters,
 ): Promise<{ result: DirectoryResult; categories: DirectoryCategory[] }> {
   const [listingsResult, categories] = await Promise.all([
-    supabase.from("website_listings").select("id,category_id,name,slug,url,normalized_domain,short_description,is_verified,is_featured,published_at,updated_at").eq("status", "approved").is("deleted_at", null).not("published_at", "is", null),
+    supabase.from("website_listings").select("id,category_id,name,slug,url,normalized_domain,short_description,is_verified,is_featured,published_at,updated_at").eq("status", "approved").eq("moderation_status", "active").is("removed_at", null).is("deleted_at", null).not("published_at", "is", null),
     getActiveCategories(supabase),
   ]);
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { moderateListingAction, moderateRevisionAction } from "@/app/admin/actions";
+import { ListingModerationDialog } from "@/app/admin/ListingModerationDialog";
 import { requireAdmin } from "@/lib/admin/auth";
 
 export const metadata: Metadata = { title: "Admin review queue", robots: { index: false, follow: false } };
@@ -32,7 +33,7 @@ export default async function AdminReviewsPage({ searchParams }: { searchParams:
 
   return (
     <main className="account-shell" id="main-content">
-      <nav className="account-nav" aria-label="Administrator navigation"><Link href="/admin">Overview</Link><Link href="/admin/reviews">Review Queue</Link><Link href="/admin/categories">Categories</Link><Link href="/">Back to Finding Sites</Link><Link href="/account">Account</Link></nav>
+      <nav className="account-nav" aria-label="Administrator navigation"><Link href="/admin">Overview</Link><Link href="/admin/listings">Listings</Link><Link href="/admin/reviews">Review Queue</Link><Link href="/admin/categories">Categories</Link><Link href="/">Back to Finding Sites</Link><Link href="/account">Account</Link></nav>
       <header className="account-heading account-heading-row"><div><span className="eyebrow">Administrator</span><h1>Category review queue</h1><p>Resolve requested categories without loading submitted websites inside the admin interface.</p></div><span className="queue-count">{listings?.length ?? 0} waiting</span></header>
       {query.error && <p className="form-alert form-alert-error" role="alert">{errorMessages[query.error] ?? errorMessages.review}</p>}
       {query.success && <p className="form-alert" role="status">Review completed successfully.</p>}
@@ -49,6 +50,7 @@ export default async function AdminReviewsPage({ searchParams }: { searchParams:
             <form action={moderateListingAction} className="moderation-form"><input type="hidden" name="listingId" value={listing.id} /><button className="button button-accent" name="intent" value="approve_new_category">Approve Category &amp; Listing</button></form>
             <form action={moderateListingAction} className="moderation-form"><input type="hidden" name="listingId" value={listing.id} /><label>Use existing category<select name="categoryId" required defaultValue=""><option value="" disabled>Choose category</option>{(categories ?? []).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label><button className="button button-secondary" name="intent" value="assign_existing">Assign &amp; Publish</button></form>
             <form action={moderateListingAction} className="moderation-form"><input type="hidden" name="listingId" value={listing.id} /><label>Review notes<textarea name="reason" minLength={5} maxLength={1000} required /></label><div className="form-actions"><button className="button button-secondary" name="intent" value="request_changes">Request Changes</button><button className="button button-danger" name="intent" value="reject">Reject</button></div></form>
+            <div className="moderation-form"><p>Urgent safety takedown</p><ListingModerationDialog listingId={listing.id} listingName={listing.name} mode="remove" returnPath="/admin/reviews" /></div>
           </div>
         </article>;
       })}</div>}

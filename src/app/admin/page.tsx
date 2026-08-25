@@ -17,12 +17,12 @@ export default async function AdminDashboardPage() {
 
   return (
     <main className="account-shell" id="main-content">
-      <nav className="account-nav" aria-label="Administrator navigation"><Link href="/admin">Overview</Link><Link href="/admin/reviews">Review Queue</Link><Link href="/admin/categories">Categories</Link><Link href="/">Back to Finding Sites</Link><Link href="/account">Account</Link></nav>
+      <nav className="account-nav" aria-label="Administrator navigation"><Link href="/admin">Overview</Link><Link href="/admin/listings">Listings</Link><Link href="/admin/reviews">Review Queue</Link><Link href="/admin/categories">Categories</Link><Link href="/">Back to Finding Sites</Link><Link href="/account">Account</Link></nav>
       <header className="account-heading"><span className="eyebrow">Administrator</span><h1>Finding Sites admin</h1><p>Category moderation and directory health at a glance.</p></header>
       {queryFailed && <p className="form-alert form-alert-error" role="alert">Some dashboard totals could not be loaded.</p>}
       <section className="admin-stat-grid" aria-label="Directory totals">
         <Link href="/admin/reviews" className="form-card admin-stat"><span>Pending category reviews</span><strong>{reviews.count ?? 0}</strong><small>{revisions.count ?? 0} listing revisions also waiting</small></Link>
-        <div className="form-card admin-stat"><span>Approved listings</span><strong>{approved.count ?? 0}</strong><small>Currently published records</small></div>
+        <Link href="/admin/listings" className="form-card admin-stat"><span>Approved listings</span><strong>{approved.count ?? 0}</strong><small>Open listing moderation</small></Link>
         <Link href="/admin/categories" className="form-card admin-stat"><span>Active categories</span><strong>{categories.count ?? 0}</strong><small>Available for automatic publication</small></Link>
         <div className="form-card admin-stat"><span>Changes or rejection</span><strong>{changes.count ?? 0}</strong><small>Owner-visible moderation outcomes</small></div>
       </section>

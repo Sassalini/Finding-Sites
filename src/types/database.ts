@@ -2,6 +2,8 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type ListingStatus = "draft" | "checkout_pending" | "pending_review" | "approved" | "rejected" | "changes_requested" | "suspended" | "subscription_inactive" | "deleted" | "permanently_rejected" | "expired";
 export type ListingRevisionStatus = "pending_review" | "approved" | "rejected";
 export type SubscriptionStatus = "active" | "trialing" | "incomplete" | "incomplete_expired" | "past_due" | "canceled" | "unpaid" | "paused";
+export type ListingModerationStatus = "active" | "removed";
+export type ListingRemovalReason = "nsfw" | "malware" | "scam" | "spam" | "illegal" | "misleading" | "terms" | "other";
 
 export interface Database {
   public: {
@@ -19,9 +21,9 @@ export interface Database {
         Relationships: [];
       };
       website_listings: {
-        Row: { id: string; owner_id: string | null; category_id: string | null; category_request_id: string | null; resolved_category_request_id: string | null; name: string; slug: string; url: string; normalized_domain: string; short_description: string; full_description: string | null; contact_email: string | null; ownership_confirmed: boolean; terms_accepted: boolean; status: ListingStatus; is_verified: boolean; is_featured: boolean; rejection_reason: string | null; approval_source: "automatic_existing_category" | "admin_new_category" | "admin_existing_category" | null; submitted_at: string; approved_at: string | null; subscription_inactive_at: string | null; deleted_at: string | null; inactive_from_status: string | null; created_at: string; updated_at: string; published_at: string | null };
-        Insert: { id?: string; owner_id?: string | null; category_id?: string | null; category_request_id?: string | null; resolved_category_request_id?: string | null; name: string; slug: string; url: string; normalized_domain: string; short_description: string; full_description?: string | null; contact_email?: string | null; ownership_confirmed?: boolean; terms_accepted?: boolean; status?: ListingStatus; is_verified?: boolean; is_featured?: boolean; rejection_reason?: string | null; approval_source?: "automatic_existing_category" | "admin_new_category" | "admin_existing_category" | null; submitted_at?: string; approved_at?: string | null; subscription_inactive_at?: string | null; deleted_at?: string | null; inactive_from_status?: string | null; created_at?: string; updated_at?: string; published_at?: string | null };
-        Update: { category_id?: string | null; category_request_id?: string | null; resolved_category_request_id?: string | null; name?: string; slug?: string; url?: string; normalized_domain?: string; short_description?: string; full_description?: string | null; contact_email?: string | null; ownership_confirmed?: boolean; terms_accepted?: boolean; status?: ListingStatus; rejection_reason?: string | null; approval_source?: "automatic_existing_category" | "admin_new_category" | "admin_existing_category" | null; submitted_at?: string; approved_at?: string | null; subscription_inactive_at?: string | null; deleted_at?: string | null; inactive_from_status?: string | null; published_at?: string | null; updated_at?: string };
+        Row: { id: string; owner_id: string | null; category_id: string | null; category_request_id: string | null; resolved_category_request_id: string | null; name: string; slug: string; url: string; normalized_domain: string; short_description: string; full_description: string | null; contact_email: string | null; ownership_confirmed: boolean; terms_accepted: boolean; status: ListingStatus; moderation_status: ListingModerationStatus; removed_at: string | null; removed_by: string | null; removal_reason: ListingRemovalReason | null; is_verified: boolean; is_featured: boolean; rejection_reason: string | null; approval_source: "automatic_existing_category" | "admin_new_category" | "admin_existing_category" | null; submitted_at: string; approved_at: string | null; subscription_inactive_at: string | null; deleted_at: string | null; inactive_from_status: string | null; created_at: string; updated_at: string; published_at: string | null };
+        Insert: { id?: string; owner_id?: string | null; category_id?: string | null; category_request_id?: string | null; resolved_category_request_id?: string | null; name: string; slug: string; url: string; normalized_domain: string; short_description: string; full_description?: string | null; contact_email?: string | null; ownership_confirmed?: boolean; terms_accepted?: boolean; status?: ListingStatus; moderation_status?: ListingModerationStatus; removed_at?: string | null; removed_by?: string | null; removal_reason?: ListingRemovalReason | null; is_verified?: boolean; is_featured?: boolean; rejection_reason?: string | null; approval_source?: "automatic_existing_category" | "admin_new_category" | "admin_existing_category" | null; submitted_at?: string; approved_at?: string | null; subscription_inactive_at?: string | null; deleted_at?: string | null; inactive_from_status?: string | null; created_at?: string; updated_at?: string; published_at?: string | null };
+        Update: { category_id?: string | null; category_request_id?: string | null; resolved_category_request_id?: string | null; name?: string; slug?: string; url?: string; normalized_domain?: string; short_description?: string; full_description?: string | null; contact_email?: string | null; ownership_confirmed?: boolean; terms_accepted?: boolean; status?: ListingStatus; moderation_status?: ListingModerationStatus; removed_at?: string | null; removed_by?: string | null; removal_reason?: ListingRemovalReason | null; rejection_reason?: string | null; approval_source?: "automatic_existing_category" | "admin_new_category" | "admin_existing_category" | null; submitted_at?: string; approved_at?: string | null; subscription_inactive_at?: string | null; deleted_at?: string | null; inactive_from_status?: string | null; published_at?: string | null; updated_at?: string };
         Relationships: [];
       };
       listing_revisions: {
@@ -34,6 +36,12 @@ export interface Database {
         Row: { listing_id: string; outbound_clicks: number; profile_views: number; searches_appeared_in: number; updated_at: string };
         Insert: { listing_id: string; outbound_clicks?: number; profile_views?: number; searches_appeared_in?: number; updated_at?: string };
         Update: { outbound_clicks?: number; profile_views?: number; searches_appeared_in?: number; updated_at?: string };
+        Relationships: [];
+      };
+      listing_moderation_events: {
+        Row: { id: string; listing_id: string; admin_user_id: string; action: "removed" | "restored"; reason: ListingRemovalReason | null; notes: string | null; publication_result: "hidden" | "public" | "private" | null; created_at: string };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       search_events: {
@@ -81,7 +89,8 @@ export interface Database {
       request_account_deletion: { Args: Record<string, never>; Returns: undefined };
       finalize_listing_after_entitlement: { Args: { candidate_listing_id: string; candidate_owner_id: string }; Returns: string };
       admin_moderate_category_listing: { Args: { candidate_listing_id: string; moderation_action: string; selected_category_id?: string | null; moderation_reason?: string | null }; Returns: string };
-      is_listing_publicly_eligible: { Args: { candidate_status: ListingStatus; candidate_deleted_at: string | null; candidate_published_at: string | null; candidate_owner_id: string | null; candidate_category_id: string | null }; Returns: boolean };
+      is_listing_publicly_eligible: { Args: { candidate_status: ListingStatus; candidate_deleted_at: string | null; candidate_published_at: string | null; candidate_owner_id: string | null; candidate_category_id: string | null; candidate_moderation_status: ListingModerationStatus; candidate_removed_at: string | null }; Returns: boolean };
+      admin_moderate_public_listing: { Args: { candidate_listing_id: string; moderation_action: "remove" | "restore"; moderation_reason?: ListingRemovalReason | null; moderation_notes?: string | null }; Returns: string };
       record_directory_search_event: { Args: { candidate_query: string; candidate_category_id: string | null; candidate_result_count: number; candidate_anonymous_session_id: string; candidate_user_id?: string | null }; Returns: boolean };
       get_directory_stats: { Args: { candidate_min_popular_frequency?: number; candidate_popular_window_days?: number }; Returns: Json };
     };

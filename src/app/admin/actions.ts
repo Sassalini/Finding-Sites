@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin/auth";
 
@@ -54,4 +54,45 @@ export async function moderateRevisionAction(formData: FormData) {
     await supabase.from("listing_revisions").update({ status: "rejected", rejection_reason: reason, reviewed_at: now, reviewed_by: user.id, review_notes: reason }).eq("id", revision.id);
   }
   revalidatePath("/admin"); revalidatePath("/admin/reviews"); revalidatePath("/account"); revalidatePath("/");
+}
+
+const removalReasons = ["nsfw", "malware", "scam", "spam", "illegal", "misleading", "terms", "other"] as const;
+
+export async function moderatePublicListingAction(formData: FormData) {
+  const returnPath = String(formData.get("returnPath") ?? "/admin/listings");
+  const safeReturnPath = returnPath === "/admin/reviews" ? returnPath : "/admin/listings";
+  const { supabase } = await requireAdmin(safeReturnPath);
+  const listingId = String(formData.get("listingId") ?? "");
+  const intent = String(formData.get("intent") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+  const confirmed = formData.get("confirmed") === "yes";
+
+  if (!listingId || !["remove", "restore"].includes(intent) || !confirmed) {
+    redirect(`${safeReturnPath}?error=moderation`);
+  }
+  if (intent === "remove" && (!removalReasons.includes(reason as typeof removalReasons[number]) || (reason === "other" && notes.length < 5))) {
+    redirect(`${safeReturnPath}?error=reason`);
+  }
+
+  const { data, error } = await supabase.rpc("admin_moderate_public_listing", {
+    candidate_listing_id: listingId,
+    moderation_action: intent as "remove" | "restore",
+    moderation_reason: intent === "remove" ? reason as typeof removalReasons[number] : null,
+    moderation_notes: notes || null,
+  });
+  if (error) {
+    console.error("[admin-listing-takedown]", { code: error.code, message: error.message });
+    if (error.message.includes("REASON") || error.message.includes("NOTES")) redirect(`${safeReturnPath}?error=reason`);
+    redirect(`${safeReturnPath}?error=moderation`);
+  }
+
+  updateTag("directory-statistics");
+  revalidatePath("/", "layout");
+  revalidatePath("/account");
+  revalidatePath("/admin");
+  revalidatePath("/admin/listings");
+  revalidatePath("/admin/reviews");
+  const outcome = data === "restored_private" ? "restored-private" : intent === "restore" ? "restored" : "removed";
+  redirect(`${safeReturnPath}?success=${outcome}`);
 }

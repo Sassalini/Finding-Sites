@@ -366,6 +366,13 @@ svg { display: block; }
 .confirm-dialog p { margin: 0; color: var(--muted); }
 .confirm-dialog label { display: grid; gap: 7px; font-size: 11px; }
 .confirm-dialog input { min-height: 44px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 6px; }
+.moderation-dialog select, .moderation-dialog textarea { width: 100%; padding: 10px 11px; border: 1px solid var(--border-strong); border-radius: 6px; background: #fff; }
+.moderation-dialog textarea { min-height: 96px; resize: vertical; }
+.moderation-dialog label small { color: var(--muted); }
+.moderation-dialog .moderation-confirm { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 9px; padding: 12px; border-radius: 7px; background: var(--accent-soft); }
+.moderation-dialog .moderation-confirm input { min-height: auto; }
+.moderation-history { padding-top: 12px; border-top: 1px solid var(--border); }
+.moderation-history summary, .moderation-card details > summary { cursor: pointer; color: var(--url); font-size: 11px; font-weight: 800; }
 .listing-preview-category { color: #806400; font-size: 11px; font-weight: 800; text-transform: uppercase; }
 .listing-preview-lead { font-size: 18px; line-height: 1.55; }
 .listing-preview dl { display: grid; gap: 10px; margin: 24px 0; }
