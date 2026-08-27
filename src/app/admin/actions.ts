@@ -10,19 +10,35 @@ export async function moderateListingAction(formData: FormData) {
   const intent = String(formData.get("intent") ?? "");
   const categoryId = String(formData.get("categoryId") ?? "") || null;
   const reason = String(formData.get("reason") ?? "").trim() || null;
+  const categoryName = String(formData.get("categoryName") ?? "").trim() || null;
+  const categorySlug = String(formData.get("categorySlug") ?? "").trim().toLowerCase() || null;
+  const categoryIconKey = String(formData.get("categoryIconKey") ?? "").trim() || null;
+  const sortOrderValue = String(formData.get("categorySortOrder") ?? "").trim();
+  const categorySortOrder = sortOrderValue ? Number(sortOrderValue) : null;
   if (!listingId || !["approve_new_category", "assign_existing", "request_changes", "reject"].includes(intent)) {
     redirect("/admin/reviews?error=review");
   }
+  if (intent === "approve_new_category" && (
+    !categoryName || categoryName.length < 2 || categoryName.length > 80
+    || !categorySlug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(categorySlug) || categorySlug.length > 100
+    || !categoryIconKey || !/^[a-z0-9-]+$/.test(categoryIconKey) || categoryIconKey.length > 50
+    || categorySortOrder === null || !Number.isInteger(categorySortOrder) || categorySortOrder < 0 || categorySortOrder > 1_000_000
+  )) redirect("/admin/reviews?error=category_details");
   const { error } = await supabase.rpc("admin_moderate_category_listing", {
     candidate_listing_id: listingId,
     moderation_action: intent,
     selected_category_id: categoryId,
     moderation_reason: reason,
+    category_name: categoryName,
+    category_slug_input: categorySlug,
+    category_icon_key: categoryIconKey,
+    category_sort_order: categorySortOrder,
   });
   if (error) {
     console.error("[admin-moderation]", { code: error.code, message: error.message });
     if (error.message.includes("CATEGORY_DUPLICATE")) redirect("/admin/reviews?error=duplicate");
     if (error.message.includes("CATEGORY_NOT_ACTIVE")) redirect("/admin/reviews?error=category");
+    if (error.message.includes("CATEGORY_NAME_INVALID") || error.message.includes("CATEGORY_SLUG_INVALID") || error.message.includes("CATEGORY_ICON_INVALID")) redirect("/admin/reviews?error=category_details");
     if (error.message.includes("REASON_REQUIRED")) redirect("/admin/reviews?error=reason");
     redirect("/admin/reviews?error=review");
   }

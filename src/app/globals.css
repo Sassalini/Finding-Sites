@@ -336,6 +336,9 @@ svg { display: block; }
 .moderation-form input, .moderation-form select, .moderation-form textarea { min-height: 42px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: 6px; background: #fff; }
 .moderation-form textarea { min-height: 92px; resize: vertical; }
 .moderation-form .form-actions { justify-content: flex-end; }
+.category-create-form summary { width: fit-content; cursor: pointer; font-size: 12px; font-weight: 800; }
+.category-create-form[open] summary { margin-bottom: 2px; }
+.category-create-form form { display: grid; gap: 14px; }
 .revision-moderation { margin-top: 34px; }
 .admin-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 24px; }
 .admin-stat { display: grid; gap: 6px; color: inherit; }

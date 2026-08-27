@@ -51,9 +51,9 @@ export interface Database {
         Relationships: [];
       };
       category_requests: {
-        Row: { id: string; requested_name: string; requested_description: string | null; requested_by: string | null; status: "pending" | "approved" | "rejected"; created_at: string; reviewed_at: string | null };
-        Insert: { id?: string; requested_name: string; requested_description?: string | null; requested_by?: string | null; status?: "pending"; created_at?: string; reviewed_at?: null };
-        Update: { status?: "pending" | "approved" | "rejected"; reviewed_at?: string | null };
+        Row: { id: string; requested_name: string; requested_description: string | null; requested_by: string | null; status: "pending" | "approved" | "rejected"; resolved_category_id: string | null; reviewed_by: string | null; reviewed_at: string | null; review_status: "pending" | "approved" | "assigned_existing" | "changes_requested" | "rejected"; review_notes: string | null; created_at: string };
+        Insert: { id?: string; requested_name: string; requested_description?: string | null; requested_by?: string | null; status?: "pending"; resolved_category_id?: null; reviewed_by?: null; reviewed_at?: null; review_status?: "pending"; review_notes?: null; created_at?: string };
+        Update: { status?: "pending" | "approved" | "rejected"; resolved_category_id?: string | null; reviewed_by?: string | null; reviewed_at?: string | null; review_status?: "pending" | "approved" | "assigned_existing" | "changes_requested" | "rejected"; review_notes?: string | null };
         Relationships: [];
       };
       billing_subscriptions: {
@@ -88,7 +88,7 @@ export interface Database {
       soft_delete_owned_listing: { Args: { candidate_listing_id: string }; Returns: undefined };
       request_account_deletion: { Args: Record<string, never>; Returns: undefined };
       finalize_listing_after_entitlement: { Args: { candidate_listing_id: string; candidate_owner_id: string }; Returns: string };
-      admin_moderate_category_listing: { Args: { candidate_listing_id: string; moderation_action: string; selected_category_id?: string | null; moderation_reason?: string | null }; Returns: string };
+      admin_moderate_category_listing: { Args: { candidate_listing_id: string; moderation_action: string; selected_category_id?: string | null; moderation_reason?: string | null; category_name?: string | null; category_slug_input?: string | null; category_icon_key?: string | null; category_sort_order?: number | null }; Returns: string };
       is_listing_publicly_eligible: { Args: { candidate_status: ListingStatus; candidate_deleted_at: string | null; candidate_published_at: string | null; candidate_owner_id: string | null; candidate_category_id: string | null; candidate_moderation_status: ListingModerationStatus; candidate_removed_at: string | null }; Returns: boolean };
       admin_moderate_public_listing: { Args: { candidate_listing_id: string; moderation_action: "remove" | "restore"; moderation_reason?: ListingRemovalReason | null; moderation_notes?: string | null }; Returns: string };
       record_directory_search_event: { Args: { candidate_query: string; candidate_category_id: string | null; candidate_result_count: number; candidate_anonymous_session_id: string; candidate_user_id?: string | null }; Returns: boolean };

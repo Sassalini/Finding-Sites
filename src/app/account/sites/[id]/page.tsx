@@ -13,7 +13,7 @@ export default async function AccountSitePage({ params }: { params: Promise<{ id
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/login?next=/account/sites/${id}`);
 
-  const listingResult = await supabase.from("website_listings").select("id,owner_id,name,url,normalized_domain,short_description,contact_email,status,moderation_status,removal_reason,removed_at,submitted_at,approved_at,category_id,category_request_id").eq("id", id).maybeSingle();
+  const listingResult = await supabase.from("website_listings").select("id,owner_id,name,url,normalized_domain,short_description,contact_email,status,moderation_status,removal_reason,removed_at,rejection_reason,submitted_at,approved_at,category_id,category_request_id").eq("id", id).maybeSingle();
   if (listingResult.error) {
     console.error("[account-listing] listing query failed", safeServerError(listingResult.error));
     return <main className="account-shell account-shell-narrow" id="main-content"><section className="form-card confirmation-card" role="alert"><h1>We couldn’t load this website submission.</h1><p>Please try again from your account.</p><Link href="/account" className="button button-secondary">Back to account</Link></section></main>;
@@ -34,6 +34,7 @@ export default async function AccountSitePage({ params }: { params: Promise<{ id
       <header className="account-heading"><span className="eyebrow">Private owner preview · {listing.status.replaceAll("_", " ")}</span><h1>{listing.name}</h1><p>{listing.normalized_domain}</p></header>
       <article className="form-card listing-preview">
         {listing.moderation_status === "removed" && <div className="rejection-note"><strong>Removed by Finding Sites</strong><p>This listing is not publicly visible because it was removed by moderation. Reason: {listing.removal_reason?.replaceAll("_", " ") ?? "terms violation"}.</p></div>}
+        {listing.rejection_reason && <div className="rejection-note"><strong>Review feedback</strong><p>{listing.rejection_reason}</p></div>}
         <p className="listing-preview-category">{categoryName}</p>
         <p className="listing-preview-lead">{listing.short_description}</p>
         <dl>
