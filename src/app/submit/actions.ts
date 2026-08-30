@@ -32,8 +32,26 @@ function field(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
 }
 
-function logSubmissionError(operation: string, error: unknown) {
-  console.error("[save-submission]", { operation, ...safeServerError(error) });
+function logSubmissionError(operation: string, error: unknown, values: SubmissionValues) {
+  const safe = safeServerError(error);
+  // Database diagnostics may echo a row, submitted contact details or credentials.
+  const diagnostics = Object.fromEntries(Object.entries(safe).map(([key, value]) => [key,
+    typeof value === "string" ? value
+      .replace(/Failing row contains[\s\S]*/gi, "[redacted row]")
+      .replace(/Key \([\s\S]*/gi, "[redacted key values]")
+      .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted email]")
+      .replace(/(?:authorization|cookie|token|secret|api[_-]?key)\s*[:=][^\r\n]*/gi, "[redacted credential]")
+      .replace(/Bearer\s+\S+|eyJ[\w-]+\.[\w-]+\.[\w-]+|(?:sk|rk)_(?:live|test)_\w+|sb_(?:secret|publishable)_\S+/g, "[redacted credential]")
+      : value,
+  ]));
+  console.error("[save-submission]", {
+    operation,
+    categoryMode: values.categoryMode,
+    hasCategoryId: Boolean(values.categoryId),
+    hasRequestedCategory: Boolean(values.requestedCategory),
+    hasRequestedCategoryDescription: Boolean(values.requestedCategoryDescription),
+    ...diagnostics,
+  });
 }
 
 function readValues(formData: FormData): SubmissionValues {
@@ -63,7 +81,7 @@ function validate(values: SubmissionValues) {
   if (!values.termsAccepted) errors.terms = "Agree to the Terms and Community Guidelines before continuing.";
   const categoryError = categoryChoiceError(values.categoryMode, values);
   if (categoryError) {
-    if (values.categoryMode === "request" && !values.categoryId) errors.requestedCategory = categoryError;
+    if (values.categoryMode === "request") errors.requestedCategory = categoryError;
     else errors.category = categoryError;
   }
   if (values.categoryMode === "request" && (values.requestedCategory.length < SUBMISSION_LIMITS.requestedCategoryMin || values.requestedCategory.length > SUBMISSION_LIMITS.requestedCategoryMax)) {
@@ -76,6 +94,12 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
   if (field(formData, "company")) return { errors: { form: "We could not save this submission." } };
   const values = readValues(formData);
   const { errors, normalizedUrl } = validate(values);
+  if (!["existing", "request"].includes(field(formData, "categoryMode"))) {
+    errors.category = "Choose an existing category or request a new one.";
+  }
+  if (errors.category || errors.requestedCategory || errors.requestedCategoryDescription) {
+    logSubmissionError("category.validate", { message: "Invalid category selection." }, values);
+  }
   if (Object.keys(errors).length || "error" in normalizedUrl) return { errors, values };
 
   const supabase = await getSupabaseServerClient();
@@ -88,7 +112,7 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
   if (listingId) {
     const result = await supabase.from("website_listings").select("id,status,owner_id").eq("id", listingId).maybeSingle();
     if (result.error || !result.data || result.data.owner_id !== user.id) {
-      if (result.error) logSubmissionError("website_listings.select", result.error);
+      if (result.error) logSubmissionError("website_listings.select", result.error, values);
       return { errors: { form: "We could not find an editable submission for this account." }, values };
     }
     existing = result.data;
@@ -100,7 +124,7 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
     try {
       entitlement = await getListingEntitlement(supabase, user.id, { logPrefix: "[save-submission]" });
     } catch (error) {
-      logSubmissionError("listing-entitlement", error);
+      logSubmissionError("listing-entitlement", error, values);
       return { errors: { form: "We couldn’t save this website draft. Please try again." }, values };
     }
     if (!entitlement.canCreateListing) return { errors: { form: "Your plan includes up to two listings. Delete an existing listing before adding another." }, values };
@@ -111,7 +135,7 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
     excluded_listing_id: existing?.id ?? null,
   });
   if (duplicateResult.error) {
-    logSubmissionError("has_likely_duplicate_domain", duplicateResult.error);
+    logSubmissionError("has_likely_duplicate_domain", duplicateResult.error, values);
     return { errors: { form: "We could not check this domain for duplicates. Please try again." }, values };
   }
   if (duplicateResult.data) {
@@ -120,24 +144,32 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
 
   let categoryId: string | null = null;
   let categoryRequestId: string | null = null;
-  if (values.categoryMode === "existing") {
-    const categoryResult = await supabase.from("categories").select("id").eq("id", values.categoryId).eq("is_active", true).maybeSingle();
-    if (categoryResult.error || !categoryResult.data) {
-      if (categoryResult.error) logSubmissionError("categories.select", categoryResult.error);
-      return { errors: { category: "That category is no longer available. Choose another." }, values };
+  try {
+    if (values.categoryMode === "existing") {
+      const categoryResult = await supabase.from("categories").select("id").eq("id", values.categoryId).eq("is_active", true).maybeSingle();
+      if (categoryResult.error || !categoryResult.data) {
+        if (categoryResult.error) logSubmissionError("categories.select", categoryResult.error, values);
+        return { errors: { category: "That category is no longer available. Choose another." }, values };
+      }
+      categoryId = categoryResult.data.id;
+    } else {
+      const requestResult = await supabase.from("category_requests").insert({
+        requested_name: values.requestedCategory,
+        requested_description: values.requestedCategoryDescription || null,
+        requested_by: user.id,
+      }).select("id").single();
+      if (requestResult.error) {
+        logSubmissionError("category_requests.insert", requestResult.error, values);
+        return { errors: { requestedCategory: "We could not save this category request. Please try again." }, values };
+      }
+      categoryRequestId = requestResult.data.id;
     }
-    categoryId = categoryResult.data.id;
-  } else {
-    const requestResult = await supabase.from("category_requests").insert({
-      requested_name: values.requestedCategory,
-      requested_description: values.requestedCategoryDescription || null,
-      requested_by: user.id,
-    }).select("id").single();
-    if (requestResult.error) {
-      logSubmissionError("category_requests.insert", requestResult.error);
-      return { errors: { requestedCategory: "We could not save this category request. Please try again." }, values };
-    }
-    categoryRequestId = requestResult.data.id;
+  } catch (error) {
+    const isExisting = values.categoryMode === "existing";
+    logSubmissionError(isExisting ? "categories.select" : "category_requests.insert", error, values);
+    return { errors: isExisting
+      ? { category: "We could not check that category. Please try again." }
+      : { requestedCategory: "We could not save this category request. Please try again." }, values };
   }
 
   if (existing?.status === "approved" || existing?.status === "subscription_inactive") {
@@ -155,7 +187,7 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
       contact_email: values.contactEmail,
     }).select("id").single();
     if (revisionResult.error) {
-      logSubmissionError("listing_revisions.insert", revisionResult.error);
+      logSubmissionError("listing_revisions.insert", revisionResult.error, values);
       const message = revisionResult.error.code === "23505"
         ? "A revision for this listing is already waiting for review."
         : "We could not submit this revision. Please try again.";
@@ -187,7 +219,7 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
       status: nextStatus,
     }).eq("id", existing.id).eq("owner_id", user.id);
     if (updateResult.error) {
-      logSubmissionError("website_listings.update", updateResult.error);
+      logSubmissionError("website_listings.update", updateResult.error, values);
       return { errors: { form: "We could not update this submission. Please try again." }, values };
     }
     revalidatePath("/account");
@@ -211,7 +243,7 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
     status: nextStatus,
   });
   if (insertResult.error) {
-    logSubmissionError("website_listings.insert", insertResult.error);
+    logSubmissionError("website_listings.insert", insertResult.error, values);
     const message = insertResult.error.message.includes("LISTING_LIMIT_REACHED")
       ? "Your plan includes up to two listings. Delete an existing listing before adding another."
       : insertResult.error.code === "23505"

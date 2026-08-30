@@ -37,7 +37,7 @@ test("description controls are optional and share the updated browser limits", (
   }
   assert.match(form, /Provide a short description of what this category is/);
   assert.doesNotMatch(form, /Why is it needed\?/);
-  assert.match(form, /FieldError message=\{state.errors.requestedCategoryDescription\}/);
+  assert.match(form, /FieldError message=\{categoryErrors.requestedCategoryDescription\}/);
 });
 
 test("shared server validation runs before draft, edit, or revision writes", () => {

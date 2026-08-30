@@ -26,8 +26,9 @@ export function switchCategoryMode(choice: CategoryChoice, mode: CategoryMode): 
 export function categoryChoiceError(mode: CategoryMode, choice: CategoryChoice) {
   const hasExistingCategory = choice.categoryId.length > 0;
   const hasRequestedCategory = choice.requestedCategory.length > 0;
+  const hasRequestedDescription = choice.requestedCategoryDescription.length > 0;
 
-  if (hasExistingCategory && hasRequestedCategory) {
+  if (hasExistingCategory && (hasRequestedCategory || hasRequestedDescription)) {
     return "Choose an existing category or request a new one, not both.";
   }
   if (!hasExistingCategory && !hasRequestedCategory) {

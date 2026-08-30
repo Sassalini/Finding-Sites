@@ -25,11 +25,13 @@
   "devDependencies": {
     "@opennextjs/cloudflare": "latest",
     "@tailwindcss/postcss": "latest",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
+    "jsdom": "^30.0.1",
     "tailwindcss": "latest",
     "tsx": "^4.23.1",
     "typescript": "latest",

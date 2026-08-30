@@ -15,11 +15,11 @@ function FieldError({ message }: { message?: string }) {
 function SubmissionButtons({ isRevision }: { isRevision: boolean }) {
   const { pending, data } = useFormStatus();
   const intent = data?.get("intent");
-  if (isRevision) return <button className="button button-accent" name="intent" value="submit" disabled={pending}>{pending ? "Submitting revision…" : "Submit revision for review"}</button>;
+  if (isRevision) return <button type="submit" className="button button-accent" name="intent" value="submit" disabled={pending}>{pending ? "Submitting revision…" : "Submit revision for review"}</button>;
   return (
     <div className="form-actions">
-      <button className="button button-secondary" name="intent" value="draft" disabled={pending}>{pending && intent === "draft" ? "Saving…" : "Save Draft"}</button>
-      <button className="button button-accent" name="intent" value="submit" disabled={pending}>{pending && intent === "submit" ? "Preparing summary…" : "Continue to Review"}</button>
+      <button type="submit" className="button button-secondary" name="intent" value="draft" disabled={pending}>{pending && intent === "draft" ? "Saving…" : "Save Draft"}</button>
+      <button type="submit" className="button button-accent" name="intent" value="submit" disabled={pending}>{pending && intent === "submit" ? "Preparing summary…" : "Continue to Review"}</button>
     </div>
   );
 }
@@ -42,10 +42,22 @@ export function SubmissionForm({ categories, initialValues, defaultEmail = "", l
     requestedCategoryDescription: values.requestedCategoryDescription,
   });
   const [descriptionLength, setDescriptionLength] = useState(values.description.length);
+  const [clearedCategoryErrors, setClearedCategoryErrors] = useState<SubmissionActionState | null>(null);
+  // Dismiss errors from the previous choice, but show fresh errors after a submit.
+  const categoryErrors = clearedCategoryErrors === state ? {} : state.errors;
 
   function changeCategoryMode(mode: CategoryMode) {
     setCategoryMode(mode);
     setCategoryChoice((choice) => switchCategoryMode(choice, mode));
+    setClearedCategoryErrors(state);
+  }
+
+  function selectCategory(categoryId: string) {
+    setCategoryChoice((choice) => ({ ...switchCategoryMode(choice, "existing"), categoryId }));
+  }
+
+  function changeRequestedCategory(field: "requestedCategory" | "requestedCategoryDescription", value: string) {
+    setCategoryChoice((choice) => ({ ...switchCategoryMode(choice, "request"), [field]: value }));
   }
 
   return (
@@ -76,16 +88,16 @@ export function SubmissionForm({ categories, initialValues, defaultEmail = "", l
         {categoryMode === "existing" ? (
           <div className="form-field">
             <label htmlFor="category-id">Closest category</label>
-            <select id="category-id" name="categoryId" value={categoryChoice.categoryId} onChange={(event) => setCategoryChoice((choice) => ({ ...choice, categoryId: event.currentTarget.value }))} aria-invalid={Boolean(state.errors.category)} required>
+            <select id="category-id" name="categoryId" value={categoryChoice.categoryId} onChange={(event) => selectCategory(event.currentTarget.value)} aria-invalid={Boolean(categoryErrors.category)} required>
               <option value="">Select a category</option>
               {categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}
             </select>
-            <FieldError message={state.errors.category} />
+            <FieldError message={categoryErrors.category} />
           </div>
         ) : (
           <div className="category-request-fields">
-            <div className="form-field"><label htmlFor="requested-category">Requested category name</label><input id="requested-category" name="requestedCategory" value={categoryChoice.requestedCategory} onChange={(event) => setCategoryChoice((choice) => ({ ...choice, requestedCategory: event.currentTarget.value }))} maxLength={SUBMISSION_LIMITS.requestedCategoryMax} aria-invalid={Boolean(state.errors.requestedCategory)} required /><FieldError message={state.errors.requestedCategory} /></div>
-            <div className="form-field"><label htmlFor="requested-category-description">Provide a short description of what this category is <span>(optional)</span></label><textarea id="requested-category-description" name="requestedCategoryDescription" value={categoryChoice.requestedCategoryDescription} onChange={(event) => setCategoryChoice((choice) => ({ ...choice, requestedCategoryDescription: event.currentTarget.value }))} minLength={SUBMISSION_LIMITS.descriptionMin} maxLength={SUBMISSION_LIMITS.descriptionMax} rows={3} aria-invalid={Boolean(state.errors.requestedCategoryDescription)} /><small>{categoryChoice.requestedCategoryDescription.length}/{SUBMISSION_LIMITS.descriptionMax} characters. You can leave this blank.</small><FieldError message={state.errors.requestedCategoryDescription} /></div>
+            <div className="form-field"><label htmlFor="requested-category">Requested category name</label><input id="requested-category" name="requestedCategory" value={categoryChoice.requestedCategory} onChange={(event) => changeRequestedCategory("requestedCategory", event.currentTarget.value)} maxLength={SUBMISSION_LIMITS.requestedCategoryMax} aria-invalid={Boolean(categoryErrors.requestedCategory)} required /><FieldError message={categoryErrors.requestedCategory} /></div>
+            <div className="form-field"><label htmlFor="requested-category-description">Provide a short description of what this category is <span>(optional)</span></label><textarea id="requested-category-description" name="requestedCategoryDescription" value={categoryChoice.requestedCategoryDescription} onChange={(event) => changeRequestedCategory("requestedCategoryDescription", event.currentTarget.value)} minLength={SUBMISSION_LIMITS.descriptionMin} maxLength={SUBMISSION_LIMITS.descriptionMax} rows={3} aria-invalid={Boolean(categoryErrors.requestedCategoryDescription)} /><small>{categoryChoice.requestedCategoryDescription.length}/{SUBMISSION_LIMITS.descriptionMax} characters. You can leave this blank.</small><FieldError message={categoryErrors.requestedCategoryDescription} /></div>
           </div>
         )}
       </fieldset>
