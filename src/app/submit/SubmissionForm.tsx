@@ -85,15 +85,15 @@ export function SubmissionForm({ categories, initialValues, defaultEmail = "", l
         ) : (
           <div className="category-request-fields">
             <div className="form-field"><label htmlFor="requested-category">Requested category name</label><input id="requested-category" name="requestedCategory" value={categoryChoice.requestedCategory} onChange={(event) => setCategoryChoice((choice) => ({ ...choice, requestedCategory: event.currentTarget.value }))} maxLength={SUBMISSION_LIMITS.requestedCategoryMax} aria-invalid={Boolean(state.errors.requestedCategory)} required /><FieldError message={state.errors.requestedCategory} /></div>
-            <div className="form-field"><label htmlFor="requested-category-description">Why is it needed? <span>(optional)</span></label><textarea id="requested-category-description" name="requestedCategoryDescription" value={categoryChoice.requestedCategoryDescription} onChange={(event) => setCategoryChoice((choice) => ({ ...choice, requestedCategoryDescription: event.currentTarget.value }))} maxLength={800} rows={3} /></div>
+            <div className="form-field"><label htmlFor="requested-category-description">Provide a short description of what this category is <span>(optional)</span></label><textarea id="requested-category-description" name="requestedCategoryDescription" value={categoryChoice.requestedCategoryDescription} onChange={(event) => setCategoryChoice((choice) => ({ ...choice, requestedCategoryDescription: event.currentTarget.value }))} minLength={SUBMISSION_LIMITS.descriptionMin} maxLength={SUBMISSION_LIMITS.descriptionMax} rows={3} aria-invalid={Boolean(state.errors.requestedCategoryDescription)} /><small>{categoryChoice.requestedCategoryDescription.length}/{SUBMISSION_LIMITS.descriptionMax} characters. You can leave this blank.</small><FieldError message={state.errors.requestedCategoryDescription} /></div>
           </div>
         )}
       </fieldset>
 
       <div className="form-field">
-        <div className="label-line"><label htmlFor="short-description">Short description</label><span>{descriptionLength}/{SUBMISSION_LIMITS.descriptionMax}</span></div>
-        <textarea id="short-description" name="description" defaultValue={values.description} minLength={SUBMISSION_LIMITS.descriptionMin} maxLength={SUBMISSION_LIMITS.descriptionMax} rows={5} onChange={(event) => setDescriptionLength(event.currentTarget.value.length)} aria-invalid={Boolean(state.errors.description)} required />
-        <small>Explain what the site offers in one or two plain-language sentences.</small><FieldError message={state.errors.description} />
+        <div className="label-line"><label htmlFor="short-description">Short description <span>(optional)</span></label><span>{descriptionLength}/{SUBMISSION_LIMITS.descriptionMax}</span></div>
+        <textarea id="short-description" name="description" defaultValue={values.description} minLength={SUBMISSION_LIMITS.descriptionMin} maxLength={SUBMISSION_LIMITS.descriptionMax} rows={5} onChange={(event) => setDescriptionLength(event.currentTarget.value.length)} aria-invalid={Boolean(state.errors.description)} />
+        <small>Explain what the site offers in one or two plain-language sentences. Up to {SUBMISSION_LIMITS.descriptionMax} characters; you can leave this blank.</small><FieldError message={state.errors.description} />
       </div>
 
       <div className="form-field">

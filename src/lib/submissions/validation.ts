@@ -1,14 +1,24 @@
 export const SUBMISSION_LIMITS = {
   nameMin: 2,
   nameMax: 120,
-  descriptionMin: 20,
-  descriptionMax: 240,
+  descriptionMin: 0,
+  descriptionMax: 250,
   requestedCategoryMin: 2,
   requestedCategoryMax: 80,
 } as const;
 
-export type SubmissionField = "name" | "url" | "category" | "requestedCategory" | "description" | "contactEmail" | "ownership" | "terms" | "form";
+export type SubmissionField = "name" | "url" | "category" | "requestedCategory" | "requestedCategoryDescription" | "description" | "contactEmail" | "ownership" | "terms" | "form";
 export type SubmissionErrors = Partial<Record<SubmissionField, string>>;
+
+export function validateSubmissionDescriptions(values: { description: string; requestedCategoryDescription: string }): SubmissionErrors {
+  const errors: SubmissionErrors = {};
+  for (const field of ["description", "requestedCategoryDescription"] as const) {
+    if (values[field].length > SUBMISSION_LIMITS.descriptionMax) {
+      errors[field] = `Use ${SUBMISSION_LIMITS.descriptionMax} characters or fewer.`;
+    }
+  }
+  return errors;
+}
 
 export type NormalizedWebsiteUrl = {
   url: string;

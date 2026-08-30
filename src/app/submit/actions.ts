@@ -7,7 +7,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getListingEntitlement } from "@/lib/billing/subscription";
 import { categoryChoiceError } from "@/lib/submissions/form";
 import { safeServerError } from "@/lib/server-errors";
-import { normalizeWebsiteUrl, slugifyName, SUBMISSION_LIMITS, type SubmissionErrors } from "@/lib/submissions/validation";
+import { normalizeWebsiteUrl, slugifyName, SUBMISSION_LIMITS, validateSubmissionDescriptions, type SubmissionErrors } from "@/lib/submissions/validation";
 import type { ListingStatus } from "@/types/database";
 
 export type SubmissionValues = {
@@ -52,15 +52,12 @@ function readValues(formData: FormData): SubmissionValues {
 }
 
 function validate(values: SubmissionValues) {
-  const errors: SubmissionErrors = {};
+  const errors: SubmissionErrors = validateSubmissionDescriptions(values);
   if (values.name.length < SUBMISSION_LIMITS.nameMin || values.name.length > SUBMISSION_LIMITS.nameMax) {
     errors.name = `Use between ${SUBMISSION_LIMITS.nameMin} and ${SUBMISSION_LIMITS.nameMax} characters.`;
   }
   const normalizedUrl = normalizeWebsiteUrl(values.url);
   if ("error" in normalizedUrl) errors.url = normalizedUrl.error;
-  if (values.description.length < SUBMISSION_LIMITS.descriptionMin || values.description.length > SUBMISSION_LIMITS.descriptionMax) {
-    errors.description = `Use between ${SUBMISSION_LIMITS.descriptionMin} and ${SUBMISSION_LIMITS.descriptionMax} characters.`;
-  }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.contactEmail) || values.contactEmail.length > 320) errors.contactEmail = "Enter a valid contact email address.";
   if (!values.ownershipConfirmed) errors.ownership = "Confirm that you own or are authorised to list this website.";
   if (!values.termsAccepted) errors.terms = "Agree to the Terms and Community Guidelines before continuing.";
@@ -72,7 +69,6 @@ function validate(values: SubmissionValues) {
   if (values.categoryMode === "request" && (values.requestedCategory.length < SUBMISSION_LIMITS.requestedCategoryMin || values.requestedCategory.length > SUBMISSION_LIMITS.requestedCategoryMax)) {
     errors.requestedCategory = `Use between ${SUBMISSION_LIMITS.requestedCategoryMin} and ${SUBMISSION_LIMITS.requestedCategoryMax} characters.`;
   }
-  if (values.requestedCategoryDescription.length > 800) errors.requestedCategory = "Keep the category explanation to 800 characters or fewer.";
   return { errors, normalizedUrl };
 }
 
