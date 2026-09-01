@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { billingWarning, isCountableListing, LISTING_LIMIT, qualifiesForNewSubmissions, retainsPublicAccess } from "@/lib/billing/policy";
+import { billingWarning, LISTING_LIMIT, qualifiesForNewSubmissions, retainsPublicAccess } from "@/lib/billing/policy";
 
 export function trialsEnabled() {
   return process.env.STRIPE_TRIALS_ENABLED === "true";
@@ -32,7 +32,10 @@ export async function getListingEntitlement(
       .select("status,cancel_at_period_end,current_period_start,current_period_end,canceled_at,ended_at,grace_period_end,stripe_customer_id,stripe_subscription_id,stripe_price_id")
       .eq("owner_id", ownerId)
       .maybeSingle(),
-    supabase.from("website_listings").select("status,deleted_at").eq("owner_id", ownerId),
+    supabase.rpc("count_slot_occupying_listings", {
+      candidate_owner_id: ownerId,
+      excluded_listing_id: null,
+    }),
   ]);
 
   if (subscriptionResult.error) {
@@ -45,8 +48,10 @@ export async function getListingEntitlement(
   }
 
   const subscription = subscriptionResult.data;
-  const listings = listingsResult.data;
-  const listingCount = (listings ?? []).filter((listing) => isCountableListing(listing.status, listing.deleted_at)).length;
+  const listingCount = listingsResult.data;
+  if (!Number.isSafeInteger(listingCount) || listingCount < 0) {
+    throw new Error("Listing slot count returned an invalid value.");
+  }
   if (logPrefix) console.info(`${logPrefix} entitlement loaded`, { found: Boolean(subscription) });
   if (logPrefix) console.info(`${logPrefix} existing listing count loaded`, { listingCount });
   const hasQualifyingSubscription = qualifiesForNewSubmissions(subscription?.status ?? null, trialsEnabled());

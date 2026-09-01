@@ -130,15 +130,18 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
     if (!entitlement.canCreateListing) return { errors: { form: "Your plan includes up to two listings. Delete an existing listing before adding another." }, values };
   }
 
-  const duplicateResult = await supabase.rpc("has_likely_duplicate_domain", {
+  const duplicateResult = await supabase.rpc("get_domain_submission_conflict", {
     candidate_domain: normalizedUrl.domain,
     excluded_listing_id: existing?.id ?? null,
   });
   if (duplicateResult.error) {
-    logSubmissionError("has_likely_duplicate_domain", duplicateResult.error, values);
+    logSubmissionError("get_domain_submission_conflict", duplicateResult.error, values);
     return { errors: { form: "We could not check this domain for duplicates. Please try again." }, values };
   }
-  if (duplicateResult.data) {
+  if (duplicateResult.data === "moderated") {
+    return { errors: { url: "This website cannot currently be resubmitted. Please contact Finding Sites." }, values };
+  }
+  if (duplicateResult.data === "current") {
     return { errors: { url: "This domain, or a closely related subdomain, already has a submission. Contact us if you manage the existing listing." }, values };
   }
 
@@ -247,7 +250,7 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
     const message = insertResult.error.message.includes("LISTING_LIMIT_REACHED")
       ? "Your plan includes up to two listings. Delete an existing listing before adding another."
       : insertResult.error.code === "23505"
-        ? "This domain or listing name is already in the directory."
+        ? "This domain is already in the directory."
         : "We could not save this submission. Please try again.";
     return { errors: { form: message }, values };
   }

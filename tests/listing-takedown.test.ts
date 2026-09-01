@@ -64,7 +64,7 @@ test("Websites Listed uses the same eligibility rule and its cache is invalidate
 test("owners retain the record and see a moderation status and public reason", () => {
   assert.match(account, /moderation_status,removed_at,removal_reason/);
   assert.match(account, /Removed by Finding Sites/);
-  assert.match(account, /no longer publicly visible because it was removed by moderation/);
+  assert.match(account, /no longer publicly visible because it was restricted by moderation/);
   assert.doesNotMatch(account, /moderation_events|admin_user_id|Private note/);
 });
 
@@ -76,9 +76,10 @@ test("private notes are confined to the administrator-only audit table", () => {
 });
 
 test("removed approved records keep occupying the two-listing allowance", () => {
-  assert.match(billingPolicy, /COUNTABLE_LISTING_STATUSES[\s\S]*"approved"/);
+  assert.match(billingPolicy, /LISTING_LIMIT = 2/);
   assert.doesNotMatch(migration, /set status = 'deleted'/);
-  assert.match(account, /continues to occupy one of your two listing slots until you delete it/);
+  assert.match(account, /continues to occupy one of your two listing slots/);
+  assert.match(account, /cannot be deleted or resubmitted while the restriction remains/);
 });
 
 test("restore clears the takedown while retaining audit history", () => {

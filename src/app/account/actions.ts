@@ -1,7 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { getListingEntitlement } from "@/lib/billing/subscription";
 import { getStripeClient } from "@/lib/stripe/server";
@@ -58,8 +58,8 @@ export async function deleteListingAction(formData: FormData) {
   if (confirmation !== "DELETE") redirect("/account?error=delete-confirmation");
   const { error } = await supabase.rpc("soft_delete_owned_listing", { candidate_listing_id: listingId });
   if (error) redirect("/account?error=delete-listing");
-  revalidatePath("/account");
-  revalidatePath("/");
+  updateTag("directory-statistics");
+  revalidatePath("/", "layout");
 }
 
 export async function requestAccountDeletionAction(formData: FormData) {

@@ -15,7 +15,7 @@ export function DeleteDialog({ listingId, listingName }: { listingId?: string; l
           {listingId && <input type="hidden" name="listingId" value={listingId} />}
           <span className="eyebrow">Destructive action</span>
           <h2>{account ? "Request account deletion?" : `Delete ${listingName}?`}</h2>
-          <p>{account ? "Active billing must be cancelled first. Your sites will be removed from public view, while required billing and audit records are retained." : "This site will disappear from the directory and free one listing slot. Your Stripe subscription will continue."}</p>
+          <p>{account ? "Active billing must be cancelled first. Your sites will be removed from public view, while required billing and audit records are retained." : "Deleting this listing will free one of your two website slots. Your directory subscription will remain active. You can submit this website again later."}</p>
           <label>Type <strong>DELETE</strong> to confirm<input name="confirmation" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" /></label>
           <div className="form-actions"><button className="button button-secondary" type="button" onClick={() => dialogRef.current?.close()}>Keep {account ? "account" : "site"}</button><button className="button button-danger" disabled={confirmation !== "DELETE"}>Confirm deletion</button></div>
         </form>

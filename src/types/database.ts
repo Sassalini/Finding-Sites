@@ -84,6 +84,8 @@ export interface Database {
     Views: Record<string, never>;
     Functions: {
       has_likely_duplicate_domain: { Args: { candidate_domain: string; excluded_listing_id?: string | null }; Returns: boolean };
+      get_domain_submission_conflict: { Args: { candidate_domain: string; excluded_listing_id?: string | null }; Returns: "none" | "current" | "moderated" };
+      count_slot_occupying_listings: { Args: { candidate_owner_id: string; excluded_listing_id?: string | null }; Returns: number };
       has_current_listing_entitlement: { Args: { candidate_owner_id: string }; Returns: boolean };
       soft_delete_owned_listing: { Args: { candidate_listing_id: string }; Returns: undefined };
       request_account_deletion: { Args: Record<string, never>; Returns: undefined };

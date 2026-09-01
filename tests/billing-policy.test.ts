@@ -1,15 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { billingWarning, isCountableListing, LISTING_LIMIT, qualifiesForNewSubmissions, retainsPublicAccess } from "../src/lib/billing/policy";
+import { billingWarning, LISTING_LIMIT, qualifiesForNewSubmissions, retainsPublicAccess } from "../src/lib/billing/policy";
 
-test("the plan has exactly two countable listing slots", () => {
+test("the plan has exactly two listing slots", () => {
   assert.equal(LISTING_LIMIT, 2);
-  assert.equal(isCountableListing("draft"), true);
-  assert.equal(isCountableListing("checkout_pending"), true);
-  assert.equal(isCountableListing("approved"), true);
-  assert.equal(isCountableListing("subscription_inactive"), true);
-  assert.equal(isCountableListing("deleted", new Date().toISOString()), false);
-  assert.equal(isCountableListing("permanently_rejected"), false);
 });
 
 test("only active or intentionally enabled trials qualify for new submissions", () => {

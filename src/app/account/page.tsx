@@ -104,13 +104,14 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             const reviewHref = `/submit/review/${listing.id}`;
             const editHref = `/account/sites/${listing.id}/edit`;
             const previewHref = `/account/sites/${listing.id}`;
+            const adminRestricted = listing.moderation_status === "removed" || ["suspended", "permanently_rejected"].includes(listing.status);
             return (
               <article className="submission-item" key={listing.id}>
                 <div className="submission-item-main">
                   <div className="submission-title-line"><h2>{listing.name}</h2><span className={`status-badge ${listing.moderation_status === "removed" ? "status-suspended" : `status-${listing.status}`}`}><span aria-hidden="true">●</span> {listing.moderation_status === "removed" ? "Removed by Finding Sites" : statusLabels[listing.status]}</span></div>
                   <a href={listing.url} target="_blank" rel="noreferrer">{listing.normalized_domain}</a>
                   <p>{categoriesById.get(listing.category_id ?? "") ?? "Requested category"} · Submitted {formatDate(listing.submitted_at)}{listing.approved_at ? ` · Approved ${formatDate(listing.approved_at)}` : ""}</p>
-                  <p className="status-explanation">{listing.moderation_status === "removed" ? "This listing is no longer publicly visible because it was removed by moderation. It continues to occupy one of your two listing slots until you delete it." : statusExplanations[listing.status] ?? "Contact the directory team for information about this status."}</p>
+                  <p className="status-explanation">{adminRestricted ? "This listing is no longer publicly visible because it was restricted by moderation. It remains reserved, continues to occupy one of your two listing slots, and cannot be deleted or resubmitted while the restriction remains. Contact Finding Sites for help." : statusExplanations[listing.status] ?? "Contact the directory team for information about this status."}</p>
                   {listing.moderation_status === "removed" && listing.removal_reason && <div className="rejection-note"><strong>Removal reason</strong><p>{removalLabels[listing.removal_reason] ?? "Terms violation"}</p></div>}
                   {listing.rejection_reason && <div className="rejection-note"><strong>Review feedback</strong><p>{listing.rejection_reason}</p></div>}
                 </div>
@@ -123,7 +124,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                   {listing.status === "changes_requested" && <><Link href={previewHref} className="button button-accent">View Feedback</Link><Link href={editHref} className="button button-secondary">Edit &amp; Resubmit</Link></>}
                   {listing.status === "subscription_inactive" && <><Link href={previewHref} className="button button-secondary">View listing</Link><Link href={editHref} className="button button-secondary">Edit</Link>{(entitlement.stripeCustomerId || profile?.stripe_customer_id) && <form action={createBillingPortalAction}><button className="button button-accent">Reactivate subscription</button></form>}</>}
                   {["suspended", "rejected", "permanently_rejected", "expired"].includes(listing.status) && <Link href={previewHref} className="button button-secondary">View submission</Link>}
-                  <DeleteDialog listingId={listing.id} listingName={listing.name} />
+                  {!adminRestricted && <DeleteDialog listingId={listing.id} listingName={listing.name} />}
                 </div>
                 {(revisionsByListing.get(listing.id) ?? []).map((revision) => <div className="revision-row" key={revision.id}><div><strong>Revision: {revision.name}</strong><small>Submitted {formatDate(revision.created_at)}</small>{revision.rejection_reason && <p>{revision.rejection_reason}</p>}</div><span className={`status-badge status-${revision.status}`}>{statusLabels[revision.status]}</span></div>)}
               </article>

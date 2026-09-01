@@ -1,14 +1,6 @@
-import type { ListingStatus, SubscriptionStatus } from "@/types/database";
+import type { SubscriptionStatus } from "@/types/database";
 
 export const LISTING_LIMIT = 2;
-export const COUNTABLE_LISTING_STATUSES: ListingStatus[] = [
-  "draft", "checkout_pending", "pending_review", "approved",
-  "changes_requested", "suspended", "subscription_inactive",
-];
-
-export function isCountableListing(status: ListingStatus, deletedAt?: string | null) {
-  return !deletedAt && COUNTABLE_LISTING_STATUSES.includes(status);
-}
 
 export function qualifiesForNewSubmissions(status: SubscriptionStatus | null, trialsEnabled: boolean) {
   return status === "active" || (status === "trialing" && trialsEnabled);
