@@ -74,6 +74,21 @@ export async function moderateRevisionAction(formData: FormData) {
 
 const removalReasons = ["nsfw", "malware", "scam", "spam", "illegal", "misleading", "terms", "other"] as const;
 
+export async function deleteSeededListingAction(formData: FormData) {
+  const { supabase } = await requireAdmin("/admin/seeded");
+  if (formData.get("confirmed") !== "yes") redirect("/admin/seeded?error=confirmation");
+  const { error } = await supabase.rpc("admin_delete_seeded_listing", {
+    candidate_listing_id: String(formData.get("listingId") ?? ""),
+  });
+  if (error) redirect("/admin/seeded?error=delete");
+  updateTag("directory-statistics");
+  revalidatePath("/", "layout");
+  revalidatePath("/admin/seeded");
+  revalidatePath("/admin/listings");
+  revalidatePath("/admin");
+  redirect("/admin/seeded?success=deleted");
+}
+
 export async function moderatePublicListingAction(formData: FormData) {
   const returnPath = String(formData.get("returnPath") ?? "/admin/listings");
   const safeReturnPath = returnPath === "/admin/reviews" ? returnPath : "/admin/listings";

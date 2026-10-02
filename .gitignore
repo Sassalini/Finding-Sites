@@ -1,6 +1,16 @@
 # dependencies
 /node_modules
 
+# Internal directory seeder: local dependencies and reviewed data
+scripts/directory-seeder/.venv/
+scripts/directory-seeder/__pycache__/
+scripts/directory-seeder/tests/__pycache__/
+scripts/directory-seeder/output/
+scripts/directory-seeder/*.log
+scripts/directory-seeder/candidates*.csv
+scripts/directory-seeder/candidates*.json
+scripts/directory-seeder/.env
+
 # next.js
 /.next/
 /out/

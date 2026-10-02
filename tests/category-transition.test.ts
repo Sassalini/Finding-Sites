@@ -45,9 +45,10 @@ function actionFixture() {
   const operations: string[] = [];
   const redirects: string[] = [];
   let categoryError: unknown = null;
+  let domainConflict: string | boolean = false;
   const client = {
     auth: { getUser: async () => ({ data: { user: { id: "test-owner" } } }) },
-    rpc: async () => ({ data: false, error: null }),
+    rpc: async () => ({ data: domainConflict, error: null }),
     from(table: string) {
       operations.push(table);
       const query = {
@@ -75,8 +76,18 @@ function actionFixture() {
     try { return await actions.saveSubmissionAction(state, data); }
     catch (error) { if (!(error instanceof Navigation)) throw error; return { errors: {} }; }
   }
-  return { save, writes, operations, redirects, failCategory: (error: unknown) => { categoryError = error; } };
+  return { save, writes, operations, redirects, failCategory: (error: unknown) => { categoryError = error; }, conflict: (value: string) => { domainConflict = value; } };
 }
+
+test("a seeded domain offers verified claiming guidance without creating a draft or duplicate error", async () => {
+  const fixture = actionFixture();
+  fixture.conflict("seeded");
+  const result = await fixture.save({ errors: {} }, submissionData({ categoryMode: "existing", categoryId }));
+  assert.match(result.errors.url ?? "", /verify ownership and arrange a claim/);
+  assert.doesNotMatch(result.errors.url ?? "", /already has a submission|already in the directory/);
+  assert.deepEqual(fixture.writes, []);
+  assert.deepEqual(fixture.redirects, []);
+});
 
 async function mountForm(values = defaultValues) {
   const fixture = actionFixture();

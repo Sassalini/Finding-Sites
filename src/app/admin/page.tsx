@@ -17,7 +17,7 @@ export default async function AdminDashboardPage() {
 
   return (
     <main className="account-shell" id="main-content">
-      <nav className="account-nav" aria-label="Administrator navigation"><Link href="/admin">Overview</Link><Link href="/admin/listings">Listings</Link><Link href="/admin/reviews">Review Queue</Link><Link href="/admin/categories">Categories</Link><Link href="/">Back to Finding Sites</Link><Link href="/account">Account</Link></nav>
+      <nav className="account-nav" aria-label="Administrator navigation"><Link href="/admin">Overview</Link><Link href="/admin/listings">Listings</Link><Link href="/admin/seeded">Seeded Listings</Link><Link href="/admin/reviews">Review Queue</Link><Link href="/admin/categories">Categories</Link><Link href="/">Back to Finding Sites</Link><Link href="/account">Account</Link></nav>
       <header className="account-heading"><span className="eyebrow">Administrator</span><h1>Finding Sites admin</h1><p>Category moderation and directory health at a glance.</p></header>
       {queryFailed && <p className="form-alert form-alert-error" role="alert">Some dashboard totals could not be loaded.</p>}
       <section className="admin-stat-grid" aria-label="Directory totals">

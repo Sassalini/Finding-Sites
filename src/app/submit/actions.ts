@@ -144,6 +144,9 @@ export async function saveSubmissionAction(_state: SubmissionActionState, formDa
   if (duplicateResult.data === "current") {
     return { errors: { url: "This domain, or a closely related subdomain, already has a submission. Contact us if you manage the existing listing." }, values };
   }
+  if (duplicateResult.data === "seeded") {
+    return { errors: { url: "We added this website to the directory. If you manage it, contact Finding Sites to verify ownership and arrange a claim before continuing." }, values };
+  }
 
   let categoryId: string | null = null;
   let categoryRequestId: string | null = null;

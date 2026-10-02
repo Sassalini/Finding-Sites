@@ -23,6 +23,7 @@
     "stripe": "^22.3.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@opennextjs/cloudflare": "latest",
     "@tailwindcss/postcss": "latest",
     "@types/jsdom": "^30.0.0",

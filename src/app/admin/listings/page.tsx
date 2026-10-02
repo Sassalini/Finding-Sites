@@ -28,7 +28,7 @@ export default async function AdminListingsPage({ searchParams }: { searchParams
   for (const event of events ?? []) eventsByListing.set(event.listing_id, [...(eventsByListing.get(event.listing_id) ?? []), event]);
 
   return <main className="account-shell" id="main-content">
-    <nav className="account-nav" aria-label="Administrator navigation"><Link href="/admin">Overview</Link><Link href="/admin/listings">Listings</Link><Link href="/admin/reviews">Review Queue</Link><Link href="/admin/categories">Categories</Link><Link href="/">Back to Finding Sites</Link><Link href="/account">Account</Link></nav>
+    <nav className="account-nav" aria-label="Administrator navigation"><Link href="/admin">Overview</Link><Link href="/admin/listings">Listings</Link><Link href="/admin/seeded">Seeded Listings</Link><Link href="/admin/reviews">Review Queue</Link><Link href="/admin/categories">Categories</Link><Link href="/">Back to Finding Sites</Link><Link href="/account">Account</Link></nav>
     <header className="account-heading account-heading-row"><div><span className="eyebrow">Administrator</span><h1>Listing moderation</h1><p>Remove unsafe or rule-breaking websites without deleting ownership, billing, or audit records.</p></div><span className="queue-count">{listings?.length ?? 0} records</span></header>
     {query.error && <p className="form-alert form-alert-error" role="alert">{errors[query.error] ?? errors.moderation}</p>}
     {query.success === "removed" && <p className="form-alert" role="status">The listing was removed from the public directory.</p>}

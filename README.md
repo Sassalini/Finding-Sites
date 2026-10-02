@@ -4,6 +4,8 @@ Finding Sites is a production-oriented MVP for a human-curated website and busin
 
 ## Stack
 
+The internal [directory seeder](scripts/directory-seeder/README.md) provides a separate Python discovery/review/import workflow for ownerless Common Crawl entries. Review its migration and setup instructions before enabling it; discovery and import default to no database writes.
+
 - Next.js App Router, React and TypeScript
 - Tailwind CSS v4 plus a small CSS-variable design system
 - Supabase Auth, PostgreSQL and row-level security

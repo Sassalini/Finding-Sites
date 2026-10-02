@@ -1,0 +1,17 @@
+{
+  "Business & Services": ["accountant", "accountancy", "bookkeeping", "consultancy", "solicitor"],
+  "Computers & Internet": ["web-design", "webdesign", "web-development", "website-design", "software", "hosting"],
+  "Education": ["tuition", "tutoring", "learning", "school", "courses"],
+  "Entertainment": ["theatre", "cinema", "comedy", "entertainment"],
+  "Finance": ["financial", "mortgage", "credit-union"],
+  "Health & Fitness": ["physiotherapy", "dentist", "fitness", "yoga"],
+  "Hobbies & Interests": ["crafts", "modelrailway", "photography", "knitting"],
+  "Home & Garden": ["plumber", "plumbers", "plumbing", "boiler", "heating", "gardening", "landscaping"],
+  "Life & Style": ["hairdresser", "beauty", "fashion", "lifestyle"],
+  "News & Media": ["newspaper", "journalism", "localnews", "magazine"],
+  "Pets & Animals": ["veterinary", "dog-grooming", "animal-rescue", "pet-supplies"],
+  "Shopping": ["shop", "retailer", "store", "supplies"],
+  "Society & Culture": ["charity", "museum", "community", "heritage"],
+  "Sports & Recreation": ["sports", "cricket", "football", "outdoor", "cycling"],
+  "Travel & Tourism": ["tourism", "holiday", "travel", "guesthouse", "hotel"]
+}
